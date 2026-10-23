@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -16,7 +18,7 @@ android {
         versionName = "0.2.0"
         // Notion OAuth goes through 51's relay Worker (notion-oauth-relay, app key "cronpaw"):
         // it holds the integration's client secret. Override with notion.oauth.relay in local.properties.
-        val localProps = java.util.Properties().apply {
+        val localProps = Properties().apply {
             rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
         }
         val relay = (localProps.getProperty("notion.oauth.relay")
