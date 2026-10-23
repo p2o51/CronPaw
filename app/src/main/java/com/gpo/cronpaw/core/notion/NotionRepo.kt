@@ -237,7 +237,18 @@ object NotionRepo {
         pages[pageId] = page
     }
 
-    suspend fun create(db: NotionDb, title: String, start: Long, end: Long, allDay: Boolean): String {
+    /**
+     * [extras]: property name → (type, values) chosen on the confirm sheet. Values are option
+     * names, or page ids for a relation.
+     */
+    suspend fun create(
+        db: NotionDb,
+        title: String,
+        start: Long,
+        end: Long,
+        allDay: Boolean,
+        extras: Map<String, Pair<String, List<String>>> = emptyMap(),
+    ): String {
         val page = NotionClient.createPage(db.id, buildJsonObject {
             put(db.titleProp, buildJsonObject {
                 put("title", buildJsonArray { add(buildJsonObject { put("text", buildJsonObject { put("content", title) }) }) })
@@ -247,6 +258,17 @@ object NotionRepo {
             val todo = db.todoValue
             if (status != null && todo != null && db.statusType != "checkbox") {
                 put(status, buildJsonObject { put(db.statusType ?: "status", buildJsonObject { put("name", todo) }) })
+            }
+            for ((prop, choice) in extras) {
+                val (type, values) = choice
+                if (values.isEmpty()) continue
+                put(prop, buildJsonObject {
+                    when (type) {
+                        "multi_select" -> put(type, buildJsonArray { values.forEach { v -> add(buildJsonObject { put("name", v) }) } })
+                        "relation" -> put(type, buildJsonArray { values.forEach { v -> add(buildJsonObject { put("id", v) }) } })
+                        else -> put(type, buildJsonObject { put("name", values.first()) })
+                    }
+                })
             }
         })
         val id = page.str("id")

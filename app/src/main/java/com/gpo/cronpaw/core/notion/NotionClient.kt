@@ -99,7 +99,8 @@ object NotionClient {
                     }
                 else -> emptyList()
             }
-            PropSchema(name, type, options)
+            val related = if (type == "relation") o["relation"]?.jsonObject?.str("database_id")?.ifBlank { null } else null
+            PropSchema(name, type, options, related)
         }
         return DatabaseSchema(databaseId, plainText(db["title"]).ifBlank { "未命名" }, props)
     }
@@ -136,6 +137,21 @@ object NotionClient {
         return out
     }
 
+    /** The most recently edited pages of a database, as (id, title): choices for a relation. */
+    suspend fun recentPages(databaseId: String, max: Int = 40): List<PropOption> {
+        val res = call("POST", "/databases/$databaseId/query", buildJsonObject {
+            put("page_size", max)
+            put("sorts", buildJsonArray {
+                add(buildJsonObject { put("timestamp", "last_edited_time"); put("direction", "descending") })
+            })
+        })
+        return res["results"]?.jsonArray.orEmpty().map { it.jsonObject }.map { page ->
+            val title = page["properties"]?.jsonObject?.values
+                ?.firstOrNull { it.jsonObject.str("type") == "title" }?.jsonObject?.get("title")
+            PropOption(plainText(title).ifBlank { "（无标题）" }, "", page.str("id"))
+        }
+    }
+
     suspend fun updatePage(pageId: String, properties: JsonObject): JsonObject =
         call("PATCH", "/pages/$pageId", buildJsonObject { put("properties", properties) })
 
@@ -156,9 +172,10 @@ object NotionClient {
 
 data class DatabaseSummary(val id: String, val title: String, val icon: String?)
 
-data class PropOption(val name: String, val color: String)
+/** A select / status option, or for a relation a page ([id] set, [name] its title). */
+data class PropOption(val name: String, val color: String, val id: String? = null)
 
-data class PropSchema(val name: String, val type: String, val options: List<PropOption>)
+data class PropSchema(val name: String, val type: String, val options: List<PropOption>, val relatedDb: String? = null)
 
 data class DatabaseSchema(val id: String, val title: String, val props: List<PropSchema>) {
     val titleProp: String? get() = props.firstOrNull { it.type == "title" }?.name

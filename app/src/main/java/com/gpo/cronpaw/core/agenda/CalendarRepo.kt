@@ -133,29 +133,79 @@ object CalendarRepo {
         end: Long,
         allDay: Boolean,
         description: String? = null,
+        extras: EventExtras = EventExtras(),
     ): Long? = withContext(Dispatchers.IO) {
         if (!canWrite(context)) return@withContext null
         val values = ContentValues().apply {
             put(CalendarContract.Events.CALENDAR_ID, calendarId)
             put(CalendarContract.Events.TITLE, title)
-            description?.let { put(CalendarContract.Events.DESCRIPTION, it) }
-            if (allDay) {
+            (extras.notes.ifBlank { null } ?: description)?.let { put(CalendarContract.Events.DESCRIPTION, it) }
+            extras.location.ifBlank { null }?.let { put(CalendarContract.Events.EVENT_LOCATION, it) }
+            extras.colorKey?.let { put(CalendarContract.Events.EVENT_COLOR_KEY, it) }
+            val (dtStart, dtEnd) = if (allDay) {
                 val zone = ZoneId.systemDefault()
                 val day = Instant.ofEpochMilli(start).atZone(zone).toLocalDate()
                 val last = Instant.ofEpochMilli(end - 1).atZone(zone).toLocalDate()
-                put(CalendarContract.Events.DTSTART, utcStart(day))
-                put(CalendarContract.Events.DTEND, utcStart(last.plusDays(1)))
                 put(CalendarContract.Events.ALL_DAY, 1)
                 put(CalendarContract.Events.EVENT_TIMEZONE, "UTC")
+                utcStart(day) to utcStart(last.plusDays(1))
             } else {
-                put(CalendarContract.Events.DTSTART, start)
-                put(CalendarContract.Events.DTEND, end)
                 put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
+                start to end
             }
+            put(CalendarContract.Events.DTSTART, dtStart)
+            // A repeating event has a length instead of an end.
+            if (extras.rrule != null) {
+                put(CalendarContract.Events.RRULE, extras.rrule)
+                put(CalendarContract.Events.DURATION, if (allDay) "P${(dtEnd - dtStart) / 86_400_000L}D" else "P${(dtEnd - dtStart) / 1000}S")
+            } else {
+                put(CalendarContract.Events.DTEND, dtEnd)
+            }
+            if (extras.reminders.isNotEmpty()) put(CalendarContract.Events.HAS_ALARM, 1)
         }
         runCatching {
-            context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)?.let { ContentUris.parseId(it) }
+            val id = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)?.let { ContentUris.parseId(it) }
+            if (id != null) for (m in extras.reminders) {
+                context.contentResolver.insert(CalendarContract.Reminders.CONTENT_URI, ContentValues().apply {
+                    put(CalendarContract.Reminders.EVENT_ID, id)
+                    put(CalendarContract.Reminders.MINUTES, m)
+                    put(CalendarContract.Reminders.METHOD, CalendarContract.Reminders.METHOD_ALERT)
+                })
+            }
+            id
         }.getOrNull()
+    }
+
+    /** What a new calendar event can carry beyond title and time. */
+    data class EventExtras(
+        val location: String = "",
+        val notes: String = "",
+        /** Minutes before the start. */
+        val reminders: List<Int> = emptyList(),
+        /** "FREQ=DAILY", "FREQ=WEEKLY;BYDAY=MO,…" etc.; null = once. */
+        val rrule: String? = null,
+        /** A key from the calendar account's event colours ([eventColors]); null = the calendar's. */
+        val colorKey: String? = null,
+    )
+
+    /** The event colours the account offers (Google calendars have 11), as key → ARGB. */
+    suspend fun eventColors(context: Context, calendarId: Long): List<Pair<String, Int>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val (account, type) = context.contentResolver.query(
+                ContentUris.withAppendedId(CalendarContract.Calendars.CONTENT_URI, calendarId),
+                arrayOf(CalendarContract.Calendars.ACCOUNT_NAME, CalendarContract.Calendars.ACCOUNT_TYPE),
+                null, null, null,
+            )?.use { c -> if (c.moveToFirst()) c.getString(0) to c.getString(1) else null } ?: return@runCatching emptyList()
+            val out = mutableListOf<Pair<String, Int>>()
+            context.contentResolver.query(
+                CalendarContract.Colors.CONTENT_URI,
+                arrayOf(CalendarContract.Colors.COLOR_KEY, CalendarContract.Colors.COLOR),
+                "${CalendarContract.Colors.ACCOUNT_NAME}=? AND ${CalendarContract.Colors.ACCOUNT_TYPE}=? AND ${CalendarContract.Colors.COLOR_TYPE}=?",
+                arrayOf(account, type, CalendarContract.Colors.TYPE_EVENT.toString()),
+                null,
+            )?.use { c -> while (c.moveToNext()) out += c.getString(0) to c.getInt(1) }
+            out
+        }.getOrDefault(emptyList())
     }
 
     private fun utcStart(day: LocalDate): Long = day.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()

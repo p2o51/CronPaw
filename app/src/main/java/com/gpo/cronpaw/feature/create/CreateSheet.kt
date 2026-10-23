@@ -46,6 +46,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import com.gpo.cronpaw.core.agenda.CalendarRepo
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -132,6 +137,9 @@ fun CreateSheet(
     var touched by remember { mutableStateOf(draft.typed || draft.editing != null) }
     var saving by remember { mutableStateOf(false) }
     var allDay by remember { mutableStateOf(draft.editing?.allDay ?: false) }
+    // Beyond title and time; reset when the target changes, since they belong to it.
+    var notionExtras by remember(target?.id) { mutableStateOf<NotionExtras>(emptyMap()) }
+    var eventExtras by remember(target?.id) { mutableStateOf(CalendarRepo.EventExtras()) }
 
     val voice = remember { Voice.create(context, scope) }
     val heard by voice.text.collectAsState()
@@ -187,7 +195,7 @@ fun CreateSheet(
                     onDismiss()
                 } else toast("没改成")
             } else {
-                val created = Actions.create(context, t, title, begin, end, allDay)
+                val created = Actions.create(context, t, title, begin, end, allDay, extras = notionExtras, eventExtras = eventExtras)
                 if (created != null) {
                     haptics.chargeFull()
                     settle()
@@ -284,6 +292,16 @@ fun CreateSheet(
                         allDay = allDay,
                         onAllDay = { allDay = it },
                         onSave = { save(auto = it) },
+                        more = {
+                            if (draft.editing == null) MoreFields(
+                                target = target,
+                                start = effStart,
+                                notion = notionExtras,
+                                onNotion = { notionExtras = it },
+                                event = eventExtras,
+                                onEvent = { eventExtras = it },
+                            )
+                        },
                     )
                 }
             }
@@ -426,7 +444,27 @@ private fun ConfirmStage(
     allDay: Boolean,
     onAllDay: (Boolean) -> Unit,
     onSave: (auto: Boolean) -> Unit,
+    more: @Composable () -> Unit = {},
 ) {
+    // Which time the dialog is setting: the start, or the end (which sets the length).
+    var picking by remember { mutableStateOf<String?>(null) }
+    picking?.let { which ->
+        val end = start + minutes * 60_000L
+        TimeDialog(
+            title = if (which == "start") "开始" else "结束",
+            minuteOfDay = Times.minuteOfDay(if (which == "start") start else end),
+            onPick = { m ->
+                picking = null
+                if (which == "start") onStart(Times.at(Times.date(start), m))
+                else {
+                    var d = m - Times.minuteOfDay(start)
+                    if (d <= 0) d += 24 * 60
+                    onMinutes(d)
+                }
+            },
+            onDismiss = { picking = null },
+        )
+    }
     val cs = MaterialTheme.colorScheme
     val haptics = rememberRichHaptics()
     val focusRequester = remember { FocusRequester() }
@@ -538,6 +576,8 @@ private fun ConfirmStage(
                     ink = cs.onPrimaryContainer,
                     onMinus = { haptics.tick(); onStart(start - 15 * 60_000L) },
                     onPlus = { haptics.tick(); onStart(start + 15 * 60_000L) },
+                    onValue = { haptics.tick(); picking = "start" },
+                    onUnit = { haptics.tick(); picking = "end" },
                     modifier = Modifier.weight(1.5f).fillMaxHeight(),
                 )
                 val (dv, du) = Times.duration(minutes)
@@ -589,6 +629,7 @@ private fun ConfirmStage(
             }
           }
         }
+        more()
         Spacer(Modifier.height(16.dp))
         // Saved: the bar draws in to a round tick.
         val shrink by animateFloatAsState(if (saved) 1f else 0f, YoinMotion.defaultSpatialSpec(), label = "saved")
@@ -627,12 +668,19 @@ private fun TimeBlock(
     ink: Color,
     onMinus: () -> Unit,
     onPlus: () -> Unit,
+    onValue: (() -> Unit)? = null,
+    onUnit: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.clip(RoundedCornerShape(if (big) 28.dp else 22.dp)).background(bg).padding(start = 16.dp, top = 12.dp, end = 4.dp, bottom = 4.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = ink.copy(alpha = 0.7f))
         Row(verticalAlignment = Alignment.Bottom) {
-            AnimatedContent(value, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "value") { v ->
+            AnimatedContent(
+                value,
+                Modifier.clip(RoundedCornerShape(12.dp)).then(if (onValue != null) Modifier.clickable(onClick = onValue) else Modifier),
+                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                label = "value",
+            ) { v ->
                 Text(
                     v,
                     style = if (big) MaterialTheme.typography.displaySmall else MaterialTheme.typography.headlineMedium,
@@ -640,7 +688,20 @@ private fun TimeBlock(
                     color = ink,
                 )
             }
-            Text(unit, Modifier.padding(start = 4.dp, bottom = if (big) 8.dp else 5.dp), style = MaterialTheme.typography.labelMedium, color = ink.copy(alpha = 0.7f), maxLines = 1)
+            // A tappable unit (the end time) reads as a small pill.
+            Text(
+                unit,
+                Modifier
+                    .padding(start = 4.dp, bottom = if (big) 6.dp else 5.dp)
+                    .then(
+                        if (onUnit != null) Modifier.clip(CircleShape).background(ink.copy(alpha = 0.12f)).clickable(onClick = onUnit).padding(horizontal = 8.dp, vertical = 3.dp)
+                        else Modifier,
+                    ),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (onUnit != null) FontWeight.Bold else FontWeight.Normal,
+                color = ink.copy(alpha = if (onUnit != null) 0.9f else 0.7f),
+                maxLines = 1,
+            )
         }
         Spacer(Modifier.weight(1f))
         Row(Modifier.align(Alignment.End)) {
@@ -650,3 +711,16 @@ private fun TimeBlock(
     }
 }
 
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TimeDialog(title: String, minuteOfDay: Int, onPick: (Int) -> Unit, onDismiss: () -> Unit) {
+    val state = rememberTimePickerState(initialHour = minuteOfDay / 60, initialMinute = minuteOfDay % 60, is24Hour = true)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { TimePicker(state) },
+        confirmButton = { TextButton(onClick = { onPick(state.hour * 60 + state.minute) }) { Text("好") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}

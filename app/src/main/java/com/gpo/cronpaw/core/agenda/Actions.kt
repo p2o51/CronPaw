@@ -60,7 +60,16 @@ object Actions {
     /** What [create] made, so 「编辑」 on the snackbar can change it afterwards. */
     data class Created(val target: Target, val ref: String, val title: String, val start: Long, val end: Long, val allDay: Boolean)
 
-    suspend fun create(context: Context, target: Target, title: String, start: Long, end: Long, allDay: Boolean = false): Created? {
+    suspend fun create(
+        context: Context,
+        target: Target,
+        title: String,
+        start: Long,
+        end: Long,
+        allDay: Boolean = false,
+        extras: Map<String, Pair<String, List<String>>> = emptyMap(),
+        eventExtras: CalendarRepo.EventExtras = CalendarRepo.EventExtras(),
+    ): Created? {
         val tempKey = "new:${if (target is Target.Notion) "notion" else "cal"}:${System.nanoTime()}"
         val temp = AgendaItem(
             key = tempKey, title = title, start = start, end = end, allDay = allDay, color = target.color,
@@ -73,8 +82,8 @@ object Actions {
         Agenda.applyLocal(temp)
         AppSettings.set(AppSettings.defaultTarget, target.id)
         val ref: String? = when (target) {
-            is Target.Calendar -> CalendarRepo.insert(context, target.info.id, title, start, end, allDay)?.toString()
-            is Target.Notion -> runCatching { NotionRepo.create(target.db, title, start, end, allDay) }.getOrNull()
+            is Target.Calendar -> CalendarRepo.insert(context, target.info.id, title, start, end, allDay, extras = eventExtras)?.toString()
+            is Target.Notion -> runCatching { NotionRepo.create(target.db, title, start, end, allDay, extras) }.getOrNull()
         }
         if (ref == null) Agenda.removeLocal(tempKey)
         Agenda.afterWrite()
