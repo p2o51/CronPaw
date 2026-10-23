@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -45,20 +46,23 @@ class MainActivity : ComponentActivity() {
                     LocalSnackbarHost provides snackbar,
                     LocalToastScope provides rootScope,
                 ) {
-                    Box(Modifier.fillMaxSize()) {
-                        CronNavHost()
-                        SnackbarHost(
-                            snackbar,
-                            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 96.dp),
-                        ) { data ->
-                            // A tonal pill in the app's own colours, not M3's dark inverse bar.
-                            Snackbar(
-                                data,
-                                shape = CircleShape,
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                actionColor = MaterialTheme.colorScheme.primary,
-                            )
+                    // The Surface supplies onSurface as the content colour for every uncoloured Text and Icon.
+                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+                        Box(Modifier.fillMaxSize()) {
+                            CronNavHost()
+                            SnackbarHost(
+                                snackbar,
+                                Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 96.dp),
+                            ) { data ->
+                                // A tonal pill in the app's own colours, not M3's dark inverse bar.
+                                Snackbar(
+                                    data,
+                                    shape = CircleShape,
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    actionColor = MaterialTheme.colorScheme.primary,
+                                )
+                            }
                         }
                     }
                 }
