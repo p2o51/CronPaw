@@ -449,6 +449,11 @@ private fun ItemBlock(
     // While carried, the original stays as a faint footprint.
     val liftAlpha by animateFloatAsState(if (lifted) 0.3f else 1f, YoinMotion.fastEffectsSpec(), label = "lifted")
     val pending = item.key.startsWith("new:")
+    // Just added: it springs up from a little smaller, where the sheet left it.
+    val pop = remember { androidx.compose.animation.core.Animatable(if (pending) 0.8f else 1f) }
+    LaunchedEffect(Unit) {
+        if (pop.value < 1f) pop.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.55f, stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow))
+    }
     var coords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
     val currentMover by rememberUpdatedState(mover)
     Row(
@@ -468,7 +473,11 @@ private fun ItemBlock(
                     onDragCancel = { currentMover?.cancel() },
                 )
             }
-            .graphicsLayer { alpha = doneAlpha * liftAlpha * (if (pending) 0.7f else 1f) }
+            .graphicsLayer {
+                alpha = doneAlpha * liftAlpha * (if (pending) 0.7f else 1f)
+                scaleX = pop.value
+                scaleY = pop.value
+            }
             .clip(RoundedCornerShape(10.dp))
             .background(bg)
             .clickable(onClick = onClick)

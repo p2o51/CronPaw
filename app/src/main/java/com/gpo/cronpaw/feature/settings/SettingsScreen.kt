@@ -1,5 +1,11 @@
 package com.gpo.cronpaw.feature.settings
 
+import com.gpo.cronpaw.ui.time.Times
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -61,22 +67,48 @@ fun SettingsScreen(nav: Nav) {
     Column(Modifier.fillMaxSize().background(cs.surface)) {
         PawTopBar("设置", onBack = { nav.pop() })
         Column(Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding()) {
-            Section("Notion") {
-                if (token.isBlank()) {
-                    Hint("在 Notion 的授权页里勾上要放进日历的数据库。")
-                    FilledTonalButton(onClick = { uriHandler.openUri(NotionOAuth.begin().toString()) }) { Text("连接 Notion") }
-                } else {
-                    Row2("已连接", workspace.ifBlank { null })
-                    Row2("重新授权", onClick = { uriHandler.openUri(NotionOAuth.begin().toString()) })
+            // Notion first, as a colour block that says where things stand.
+            val connected = token.isNotBlank()
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .clip(RoundedCornerShape(32.dp))
+                    .background(if (connected) cs.primaryContainer else cs.tertiaryContainer)
+                    .padding(start = 22.dp, end = 16.dp, top = 20.dp, bottom = 16.dp),
+            ) {
+                val ink = if (connected) cs.onPrimaryContainer else cs.onTertiaryContainer
+                Text("Notion", style = MaterialTheme.typography.labelLarge, color = ink.copy(alpha = 0.7f))
+                Text(
+                    if (connected) workspace.ifBlank { "已连接" } else "还没连接",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = ink,
+                )
+                Text(
+                    if (connected) "${dbs.size} 个数据库在日历上" else "在授权页里勾上要放进日历的数据库。",
+                    Modifier.padding(top = 2.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = ink.copy(alpha = 0.75f),
+                )
+                oauthStatus?.let { Text(it, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodySmall, color = ink) }
+                Spacer(Modifier.height(14.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilledTonalButton(onClick = { uriHandler.openUri(NotionOAuth.begin().toString()) }) {
+                        Text(if (connected) "重新授权" else "连接 Notion", fontWeight = FontWeight.Bold)
+                    }
+                    if (connected) TextButton(onClick = { NotionOAuth.disconnect(); Agenda.refresh(); toast("已断开") }) {
+                        Text("断开", color = ink)
+                    }
                 }
-                oauthStatus?.let { Hint(it) }
+            }
+            Section("数据库") {
                 dbs.forEach { db ->
                     Row2(db.title, if (db.enabled) null else "已隐藏", onClick = { nav.push("db:${db.id}") }, leading = {
                         Box(Modifier.size(16.dp).clip(RoundedCornerShape(5.dp)).background(Color(db.color)))
                     })
                 }
                 Row2("添加数据库", onClick = { nav.push("db:") })
-                if (token.isNotBlank()) Row2("断开 Notion", onClick = { NotionOAuth.disconnect(); Agenda.refresh(); toast("已断开") })
             }
 
             Section("语音") {
@@ -91,16 +123,18 @@ fun SettingsScreen(nav: Nav) {
                 Field("每行一个：标题|分钟", quick, { AppSettings.set(AppSettings.quickEntries, it) }, singleLine = false)
             }
 
-            Section("点时间轴新建") {
+            // 新建: the two numbers that shape a new item, side by side, each with its choices.
+            Section("新建") {
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ValueTile("点时间轴新建", Times.duration(defaultMinutes), cs.secondaryContainer, cs.onSecondaryContainer, Modifier.weight(1.2f).fillMaxHeight())
+                    ValueTile("自动加入", if (autoSave == 0) "不" to "自动" else "$autoSave" to "秒", cs.surfaceContainerHigh, cs.onSurface, Modifier.weight(1f).fillMaxHeight())
+                }
+                Hint("点时间轴的空白处，从那里开始新建，默认这么长。")
                 Choices(listOf(15 to "15 分钟", 30 to "30 分钟", 45 to "45 分钟", 60 to "1 小时", 90 to "1.5 小时", 120 to "2 小时"), defaultMinutes) {
                     AppSettings.set(AppSettings.defaultMinutes, it)
                 }
-                Hint("点时间轴的空白处，从那里开始新建，默认这么长。")
-            }
-
-            Section("自动加入") {
+                Hint("确认页不碰屏幕，倒计时结束就自动加入。")
                 Choices(listOf(0 to "不自动", 3 to "3 秒", 4 to "4 秒", 6 to "6 秒"), autoSave) { AppSettings.set(AppSettings.autoSaveSeconds, it) }
-                Hint("说完不碰屏幕，倒计时结束就加入。")
             }
 
             Section("外观") {
@@ -122,6 +156,18 @@ fun SettingsScreen(nav: Nav) {
                 Row2("重新读取日历", onClick = { Agenda.refresh(); toast("已刷新") })
             }
             Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+/** A label over a bold value and a quiet unit, in a colour block. */
+@Composable
+private fun ValueTile(label: String, value: Pair<String, String>, bg: Color, ink: Color, modifier: Modifier = Modifier) {
+    Column(modifier.clip(RoundedCornerShape(20.dp)).background(bg).padding(horizontal = 16.dp, vertical = 14.dp)) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = ink.copy(alpha = 0.7f))
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(value.first, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = ink)
+            Text(value.second, Modifier.padding(start = 3.dp, bottom = 5.dp), style = MaterialTheme.typography.labelMedium, color = ink.copy(alpha = 0.7f))
         }
     }
 }

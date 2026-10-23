@@ -1,5 +1,6 @@
 package com.gpo.cronpaw.feature.home
 
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.fadeIn
@@ -219,41 +220,91 @@ fun AllUpcomingSheet(items: List<AgendaItem>, onItem: (AgendaItem) -> Unit, onDi
     }
     val haptics = rememberRichHaptics()
     val cs = MaterialTheme.colorScheme
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = cs.surfaceContainerLow) {
+    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    val scope = rememberCoroutineScope()
+    // Slide down, then open the item.
+    val open: (AgendaItem) -> Unit = { item -> scope.launch { runCatching { sheet.hide() }; onItem(item) } }
+    val byDay = remember(list) { list.drop(1).groupBy { Times.date(it.start) } }
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = cs.surfaceContainerLow) {
         Text("接下来", Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
-        LazyColumn(Modifier.navigationBarsPadding(), contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp)) {
-            items(list, key = { it.key }) { item ->
-                val pinned = item.key in pins
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 2.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(if (pinned) cs.secondaryContainer else cs.surfaceContainer)
-                        .clickable { onItem(item) }
-                        .padding(start = 14.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(Modifier.size(8.dp, 28.dp).clip(RoundedCornerShape(4.dp)).background(Color(item.color)))
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(item.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            "${Times.dayLabel(Times.date(item.start))}  ${Times.hmRange(item)}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = cs.onSurfaceVariant,
-                        )
+        LazyColumn(Modifier.navigationBarsPadding(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
+            // The very next one, large and in its own colours.
+            list.firstOrNull()?.let { next ->
+                item(key = "next:${next.key}") {
+                    val (bg, ink) = itemColors(next)
+                    val pinned = next.key in pins
+                    Column(
+                        Modifier.fillMaxWidth().padding(bottom = 6.dp).clip(RoundedCornerShape(28.dp)).background(bg)
+                            .clickable { open(next) }.padding(start = 20.dp, top = 16.dp, bottom = 8.dp, end = 4.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.Top) {
+                            Column(Modifier.weight(1f)) {
+                                Text(Times.dayLabel(Times.date(next.start)), style = MaterialTheme.typography.labelLarge, color = ink.copy(alpha = 0.75f))
+                                Row(verticalAlignment = Alignment.Bottom) {
+                                    Text(if (next.allDay) "全天" else Times.hm(next.start), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = ink)
+                                    if (!next.allDay) Text(
+                                        "到 ${Times.hm(next.end)}",
+                                        Modifier.padding(start = 8.dp, bottom = 7.dp),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = ink.copy(alpha = 0.75f),
+                                    )
+                                }
+                            }
+                            PinButton(pinned, ink) { haptics.tick(); Pins.toggle(next.key); TopCardSession.dismissed.remove(next.key) }
+                        }
+                        Text(next.title, Modifier.padding(end = 16.dp, bottom = 8.dp), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
-                    IconButton(onClick = {
-                        haptics.tick()
-                        Pins.toggle(item.key)
-                        TopCardSession.dismissed.remove(item.key)
-                    }) {
-                        Icon(if (pinned) CronSymbols.PinFilled else CronSymbols.Pin, if (pinned) "取消置顶" else "置顶", tint = if (pinned) cs.primary else cs.onSurfaceVariant)
+                }
+            }
+            byDay.forEach { (day, dayItems) ->
+                item(key = "day:$day") {
+                    Text(Times.dayLabel(day), Modifier.padding(start = 12.dp, top = 14.dp, bottom = 4.dp), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                }
+                items(dayItems, key = { it.key }) { item ->
+                    val pinned = item.key in pins
+                    // Time on the left, bold start over a quiet end; the item as a colour block.
+                    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.width(60.dp).padding(start = 12.dp)) {
+                            Text(if (item.allDay) "全天" else Times.hm(item.start), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            if (!item.allDay) Text(Times.hm(item.end), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                        }
+                        val (bg, ink) = itemColors(item)
+                        Row(
+                            Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(if (pinned) bg else cs.surfaceContainer)
+                                .clickable { open(item) }.padding(start = 14.dp, top = 4.dp, bottom = 4.dp, end = 0.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (!pinned) {
+                                Box(Modifier.size(6.dp, 20.dp).clip(RoundedCornerShape(3.dp)).background(Color(item.color)))
+                                Spacer(Modifier.width(10.dp))
+                            }
+                            Text(
+                                item.title,
+                                Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Medium,
+                                color = if (pinned) ink else cs.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            PinButton(pinned, if (pinned) ink else cs.onSurfaceVariant) {
+                                haptics.tick()
+                                Pins.toggle(item.key)
+                                TopCardSession.dismissed.remove(item.key)
+                            }
+                        }
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun PinButton(pinned: Boolean, tint: Color, onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        Icon(if (pinned) CronSymbols.PinFilled else CronSymbols.Pin, if (pinned) "取消置顶" else "置顶", tint = tint)
+    }
+
 }

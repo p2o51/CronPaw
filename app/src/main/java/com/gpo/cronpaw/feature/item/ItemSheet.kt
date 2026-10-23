@@ -36,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -59,6 +60,7 @@ import com.gpo.cronpaw.core.agenda.Source
 import com.gpo.cronpaw.core.notion.NotionRepo
 import com.gpo.cronpaw.core.notion.PropValue
 import com.gpo.cronpaw.feature.home.TodoDot
+import com.gpo.cronpaw.feature.home.itemColors
 import com.gpo.cronpaw.ui.components.rememberToast
 import com.gpo.cronpaw.ui.theme.CronSymbols
 import com.gpo.cronpaw.ui.theme.pawIsDark
@@ -95,7 +97,8 @@ fun ItemSheet(item: AgendaItem, onDismiss: () -> Unit) {
     }
     val dark = pawIsDark()
 
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = cs.surfaceContainerLow) {
+    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = cs.surfaceContainerLow) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -104,43 +107,62 @@ fun ItemSheet(item: AgendaItem, onDismiss: () -> Unit) {
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 16.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (live.todo) {
-                    TodoDot(live.done, Color(live.color), cs.onSurface, {
-                        haptics.tick()
-                        scope.launch { if (!Actions.setDone(live, !live.done)) toast("没改成") else if (!live.done) haptics.chargeFull() }
-                    }, size = 26.dp)
-                } else {
-                    Box(Modifier.size(12.dp, 28.dp).clip(RoundedCornerShape(6.dp)).background(Color(live.color)))
-                }
-                Spacer(Modifier.width(12.dp))
-                Text(live.title, Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            }
-            Spacer(Modifier.height(16.dp))
-
-            // 时间
-            Block {
-                Label("时间")
-                Text(Times.dayLabel(Times.date(live.start)), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(
-                    if (live.allDay) "全天" else "${Times.hm(live.start)}  ${Times.hm(live.end)}  ${Times.durationText(live.durationMinutes)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = cs.onSurfaceVariant,
-                )
-                live.location?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant) }
-            }
-
-            // 来源
-            when (val src = live.source) {
-                is Source.Calendar -> calendars.firstOrNull { it.id == src.calendarId }?.let { cal ->
-                    Block {
-                        Label("日历")
-                        Text(cal.name, style = MaterialTheme.typography.titleSmall)
-                        Text(cal.accountName, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            // The item in its own colours: title, then when, the start large and the rest quiet.
+            val (heroBg, heroInk) = itemColors(live)
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(heroBg)
+                    .padding(start = 20.dp, end = 16.dp, top = 18.dp, bottom = 18.dp),
+            ) {
+                Row(verticalAlignment = Alignment.Top) {
+                    Text(live.title, Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = heroInk)
+                    if (live.todo) {
+                        Spacer(Modifier.width(12.dp))
+                        TodoDot(live.done, Color(live.color), heroInk, {
+                            haptics.tick()
+                            scope.launch { if (!Actions.setDone(live, !live.done)) toast("没改成") else if (!live.done) haptics.chargeFull() }
+                        }, size = 28.dp)
                     }
                 }
-                is Source.Notion -> Unit
+                Spacer(Modifier.height(18.dp))
+                Text(Times.dayLabel(Times.date(live.start)), style = MaterialTheme.typography.labelLarge, color = heroInk.copy(alpha = 0.75f))
+                if (live.allDay) {
+                    Text("全天", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = heroInk)
+                } else {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(Times.hm(live.start), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = heroInk)
+                        Text(
+                            "到 ${Times.hm(live.end)} · ${Times.durationText(live.durationMinutes)}",
+                            Modifier.padding(start = 8.dp, bottom = 7.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = heroInk.copy(alpha = 0.75f),
+                        )
+                    }
+                }
+                live.location?.let { Text(it, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodyMedium, color = heroInk.copy(alpha = 0.75f)) }
             }
+            Spacer(Modifier.height(8.dp))
+
+            // Where it lives, as a small chip rather than a block of its own.
+            val origin = when (val src = live.source) {
+                is Source.Calendar -> calendars.firstOrNull { it.id == src.calendarId }?.let { it.name to it.accountName }
+                is Source.Notion -> db?.let { it.title to "Notion" }
+            }
+            origin?.let { (name, account) ->
+                Row(
+                    Modifier.padding(vertical = 2.dp).clip(CircleShape).background(cs.surfaceContainer).padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(Color(live.color)))
+                    Spacer(Modifier.width(8.dp))
+                    Text(name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.width(6.dp))
+                    Text(account, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
+                }
+            }
+            Spacer(Modifier.height(4.dp))
 
             // 状态 + the properties the user chose to show
             if (db != null) {
@@ -249,7 +271,12 @@ fun ItemSheet(item: AgendaItem, onDismiss: () -> Unit) {
                     if (!confirmDelete) { haptics.tick(); confirmDelete = true; return@IconButton }
                     haptics.lowTick()
                     scope.launch {
-                        if (Actions.delete(context, live)) { toast("已删除"); onDismiss() } else toast("删不掉")
+                        if (Actions.delete(context, live)) {
+                            // Slide away first, so it doesn't just blink out.
+                            runCatching { sheet.hide() }
+                            toast("已删除")
+                            onDismiss()
+                        } else toast("删不掉")
                     }
                 }) {
                     Icon(YoinSymbols.Delete, if (confirmDelete) "再点一次删除" else "删除", tint = if (confirmDelete) cs.error else cs.onSurfaceVariant)

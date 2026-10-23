@@ -7,6 +7,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.Animatable
@@ -21,6 +23,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -45,7 +49,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -84,6 +87,7 @@ import com.gpo.cronpaw.ui.theme.YoinMotion
 import com.gpo.cronpaw.ui.theme.rememberRichHaptics
 import com.gpo.cronpaw.ui.time.Times
 import com.gpo.yoin.symbols.YoinSymbols
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** A new item on its way: where the drop (or now) put it, and how it was asked for. */
@@ -160,9 +164,17 @@ fun CreateSheet(
     val effMinutes = parsed.minutes ?: minutes
     val title = parsed.title.ifBlank { text.trim() }
 
+    // After a save: the button turns into a tick, then the sheet slides away before it closes.
+    var saved by remember { mutableStateOf(false) }
+    suspend fun settle() {
+        saved = true
+        delay(260)
+        runCatching { sheet.hide() }
+    }
+
     fun save(auto: Boolean) {
         val t = target ?: run { toast("没有可写的日历"); return }
-        if (title.isBlank() || saving) return
+        if (title.isBlank() || saving || saved) return
         saving = true
         scope.launch {
             val begin = if (allDay) Times.startOf(Times.date(effStart)) else effStart
@@ -171,12 +183,14 @@ fun CreateSheet(
             if (editing != null) {
                 if (Actions.edit(context, editing, title, begin, end)) {
                     haptics.chargeFull()
+                    settle()
                     onDismiss()
                 } else toast("没改成")
             } else {
                 val created = Actions.create(context, t, title, begin, end, allDay)
                 if (created != null) {
                     haptics.chargeFull()
+                    settle()
                     onSaved(created, auto)
                 } else toast("没加上")
             }
@@ -265,6 +279,7 @@ fun CreateSheet(
                         onMinutes = { minutes = it; if (parsed.minutes != null) text = parsed.title },
                         countdown = !touched && AppSettings.autoSaveSeconds.value > 0 && title.isNotBlank(),
                         saving = saving,
+                        saved = saved,
                         editing = draft.editing != null,
                         allDay = allDay,
                         onAllDay = { allDay = it },
@@ -406,6 +421,7 @@ private fun ConfirmStage(
     onMinutes: (Int) -> Unit,
     countdown: Boolean,
     saving: Boolean,
+    saved: Boolean,
     editing: Boolean,
     allDay: Boolean,
     onAllDay: (Boolean) -> Unit,
@@ -480,22 +496,63 @@ private fun ConfirmStage(
         }
         Spacer(Modifier.height(12.dp))
         val day = Times.date(start)
-        Stepper("日期", Times.dayLabel(day), onMinus = { haptics.tick(); onStart(start - 86_400_000L) }, onPlus = { haptics.tick(); onStart(start + 86_400_000L) })
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(vertical = 2.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(cs.surfaceContainer)
-                .padding(start = 16.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("全天", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Switch(allDay, { haptics.tick(); onAllDay(it) })
+        // The day as a pill with 全天 beside it, then when as two blocks of unequal weight:
+        // the start large, the length smaller and quieter.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.clip(CircleShape).background(cs.surfaceContainer),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = { haptics.tick(); onStart(start - 86_400_000L) }) { Icon(YoinSymbols.ChevronLeft, "前一天") }
+                AnimatedContent(Times.dayLabel(day), transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "day") { label ->
+                    Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+                IconButton(onClick = { haptics.tick(); onStart(start + 86_400_000L) }) { Icon(YoinSymbols.ChevronRight, "后一天") }
+            }
+            Spacer(Modifier.weight(1f))
+            Text(
+                "全天",
+                Modifier
+                    .clip(CircleShape)
+                    .background(if (allDay) cs.tertiary else cs.surfaceContainer)
+                    .clickable { haptics.tick(); onAllDay(!allDay) }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = if (allDay) cs.onTertiary else cs.onSurfaceVariant,
+            )
         }
-        if (!allDay) {
-            Stepper("开始", Times.hm(start), onMinus = { haptics.tick(); onStart(start - 15 * 60_000L) }, onPlus = { haptics.tick(); onStart(start + 15 * 60_000L) })
-            Stepper("时长", Times.durationText(minutes), onMinus = { haptics.tick(); onMinutes((minutes - 15).coerceAtLeast(5)) }, onPlus = { haptics.tick(); onMinutes(minutes + 15) })
+        AnimatedVisibility(
+            visible = !allDay,
+            enter = fadeIn(YoinMotion.defaultEffectsSpec()) + expandVertically(YoinMotion.defaultSpatialSpec()),
+            exit = fadeOut(YoinMotion.fastEffectsSpec()) + shrinkVertically(YoinMotion.fastSpatialSpec()),
+        ) {
+          Column {
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp).height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TimeBlock(
+                    label = "开始",
+                    value = Times.hm(start),
+                    unit = "到 ${Times.hm(start + minutes * 60_000L)}",
+                    big = true,
+                    bg = cs.primaryContainer,
+                    ink = cs.onPrimaryContainer,
+                    onMinus = { haptics.tick(); onStart(start - 15 * 60_000L) },
+                    onPlus = { haptics.tick(); onStart(start + 15 * 60_000L) },
+                    modifier = Modifier.weight(1.5f).fillMaxHeight(),
+                )
+                val (dv, du) = Times.duration(minutes)
+                TimeBlock(
+                    label = "时长",
+                    value = dv,
+                    unit = du,
+                    big = false,
+                    bg = cs.secondaryContainer,
+                    ink = cs.onSecondaryContainer,
+                    onMinus = { haptics.tick(); onMinutes((minutes - 15).coerceAtLeast(5)) },
+                    onPlus = { haptics.tick(); onMinutes(minutes + 15) },
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                )
+            }
             // The usual lengths one tap away; 「默认」 keeps the choice for the next tap on the timeline.
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 6.dp),
@@ -530,11 +587,17 @@ private fun ConfirmStage(
                     )
                 }
             }
+          }
         }
         Spacer(Modifier.height(16.dp))
+        // Saved: the bar draws in to a round tick.
+        val shrink by animateFloatAsState(if (saved) 1f else 0f, YoinMotion.defaultSpatialSpec(), label = "saved")
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val full = maxWidth
         Box(
             Modifier
-                .fillMaxWidth()
+                .align(Alignment.Center)
+                .width(full - (full - 56.dp) * shrink)
                 .height(56.dp)
                 .clip(CircleShape)
                 .background(cs.primary)
@@ -543,28 +606,47 @@ private fun ConfirmStage(
         ) {
             // The countdown fills the button from the left.
             Box(Modifier.align(Alignment.CenterStart).fillMaxHeight().fillMaxWidth(progress.value).background(cs.onPrimary.copy(alpha = 0.18f)))
-            if (saving) CircularProgressIndicator(Modifier.size(24.dp), color = cs.onPrimary, strokeWidth = 3.dp)
-            else Text(if (editing) "保存" else "加入", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = cs.onPrimary)
+            when {
+                saved -> Icon(YoinSymbols.Check, null, Modifier.size(28.dp), tint = cs.onPrimary)
+                saving -> CircularProgressIndicator(Modifier.size(24.dp), color = cs.onPrimary, strokeWidth = 3.dp)
+                else -> Text(if (editing) "保存" else "加入", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = cs.onPrimary, maxLines = 1)
+            }
+        }
         }
     }
 }
 
+/** A colour block for one part of when: label on top, a bold value and a quiet unit, ‹ › below. */
 @Composable
-private fun Stepper(label: String, value: String, onMinus: () -> Unit, onPlus: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(cs.surfaceContainer)
-            .padding(start = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, Modifier.width(48.dp), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-        Text(value, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        IconButton(onClick = onMinus) { Icon(YoinSymbols.ChevronLeft, "减") }
-        IconButton(onClick = onPlus) { Icon(YoinSymbols.ChevronRight, "加") }
+private fun TimeBlock(
+    label: String,
+    value: String,
+    unit: String,
+    big: Boolean,
+    bg: Color,
+    ink: Color,
+    onMinus: () -> Unit,
+    onPlus: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier.clip(RoundedCornerShape(if (big) 28.dp else 22.dp)).background(bg).padding(start = 16.dp, top = 12.dp, end = 4.dp, bottom = 4.dp)) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = ink.copy(alpha = 0.7f))
+        Row(verticalAlignment = Alignment.Bottom) {
+            AnimatedContent(value, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "value") { v ->
+                Text(
+                    v,
+                    style = if (big) MaterialTheme.typography.displaySmall else MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = ink,
+                )
+            }
+            Text(unit, Modifier.padding(start = 4.dp, bottom = if (big) 8.dp else 5.dp), style = MaterialTheme.typography.labelMedium, color = ink.copy(alpha = 0.7f), maxLines = 1)
+        }
+        Spacer(Modifier.weight(1f))
+        Row(Modifier.align(Alignment.End)) {
+            IconButton(onClick = onMinus) { Icon(YoinSymbols.ChevronLeft, "减", tint = ink) }
+            IconButton(onClick = onPlus) { Icon(YoinSymbols.ChevronRight, "加", tint = ink) }
+        }
     }
 }
 
