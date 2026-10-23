@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -38,7 +37,6 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.gpo.cronpaw.ui.theme.RichHaptics
 import com.gpo.cronpaw.ui.theme.YoinMotion
@@ -84,23 +82,23 @@ fun CreateTray(
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            FixedBar(15, 72.dp, carry, haptics)
-            FixedBar(30, 96.dp, carry, haptics)
-            FixedBar(90, 132.dp, carry, haptics)
+        // Widths follow the lengths, and the three together span the tray.
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            FixedBar(15, Modifier.weight(1f), carry, haptics)
+            FixedBar(30, Modifier.weight(1.3f), carry, haptics)
+            FixedBar(90, Modifier.weight(1.8f), carry, haptics)
         }
         CustomBar(custom, onCustom, editing, onEditing, carry, haptics)
     }
 }
 
 @Composable
-private fun FixedBar(minutes: Int, width: Dp, carry: TrayDrag, haptics: RichHaptics) {
+private fun FixedBar(minutes: Int, modifier: Modifier, carry: TrayDrag, haptics: RichHaptics) {
     val cs = MaterialTheme.colorScheme
     var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val (value, unit) = Times.duration(minutes)
     Box(
-        Modifier
-            .width(width)
+        modifier
             .height(48.dp)
             .onGloballyPositioned { coords = it }
             .clip(RoundedCornerShape(16.dp))

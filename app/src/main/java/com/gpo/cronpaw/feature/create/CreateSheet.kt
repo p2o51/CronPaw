@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -203,6 +204,8 @@ fun CreateSheet(
                 .fillMaxWidth()
                 .navigationBarsPadding()
                 .imePadding()
+                // With the keyboard up the sheet scrolls instead of squashing the 加入 button.
+                .verticalScroll(rememberScrollState())
                 .pointerInput(Unit) {
                     // Any touch stops the countdown.
                     awaitPointerEventScope {
