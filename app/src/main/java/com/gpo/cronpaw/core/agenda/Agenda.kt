@@ -52,7 +52,9 @@ object Agenda {
     /** Optimistic local edits not yet confirmed by a reload: key → replacement (null = removed). */
     private val overlay = mutableMapOf<String, AgendaItem?>()
 
+    /** Safe to call again (the widget and its jobs may start the process). */
     fun init(context: Context) {
+        if (::app.isInitialized) return
         app = context.applicationContext
         val cached = runCatching {
             NotionClient.json.decodeFromString(cacheSerializer, cacheFile().readText())

@@ -173,6 +173,16 @@ object CalendarRepo {
         }.getOrDefault(false)
     }
 
+    suspend fun setTitle(context: Context, eventId: Long, title: String): Boolean = withContext(Dispatchers.IO) {
+        if (!canWrite(context)) return@withContext false
+        val values = ContentValues().apply { put(CalendarContract.Events.TITLE, title) }
+        runCatching {
+            context.contentResolver.update(
+                ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId), values, null, null,
+            ) > 0
+        }.getOrDefault(false)
+    }
+
     suspend fun delete(context: Context, eventId: Long): Boolean = withContext(Dispatchers.IO) {
         runCatching {
             context.contentResolver.delete(

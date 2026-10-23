@@ -57,7 +57,10 @@ object Actions {
         return ok
     }
 
-    suspend fun create(context: Context, target: Target, title: String, start: Long, end: Long, allDay: Boolean = false): Boolean {
+    /** What [create] made, so 「编辑」 on the snackbar can change it afterwards. */
+    data class Created(val target: Target, val ref: String, val title: String, val start: Long, val end: Long, val allDay: Boolean)
+
+    suspend fun create(context: Context, target: Target, title: String, start: Long, end: Long, allDay: Boolean = false): Created? {
         val tempKey = "new:${if (target is Target.Notion) "notion" else "cal"}:${System.nanoTime()}"
         val temp = AgendaItem(
             key = tempKey, title = title, start = start, end = end, allDay = allDay, color = target.color,
@@ -69,19 +72,38 @@ object Actions {
         )
         Agenda.applyLocal(temp)
         AppSettings.set(AppSettings.defaultTarget, target.id)
-        val ok = when (target) {
-            is Target.Calendar -> CalendarRepo.insert(context, target.info.id, title, start, end, allDay) != null
-            is Target.Notion -> runCatching { NotionRepo.create(target.db, title, start, end, allDay) }.isSuccess
+        val ref: String? = when (target) {
+            is Target.Calendar -> CalendarRepo.insert(context, target.info.id, title, start, end, allDay)?.toString()
+            is Target.Notion -> runCatching { NotionRepo.create(target.db, title, start, end, allDay) }.getOrNull()
         }
-        if (!ok) Agenda.removeLocal(tempKey)
+        if (ref == null) Agenda.removeLocal(tempKey)
+        Agenda.afterWrite()
+        return ref?.let { Created(target, it, title, start, end, allDay) }
+    }
+
+    /** Changes something [create] just made (the 「编辑」 after an auto-save). */
+    suspend fun edit(context: Context, created: Created, title: String, start: Long, end: Long): Boolean {
+        val ok = when (val t = created.target) {
+            is Target.Calendar -> {
+                val id = created.ref.toLong()
+                (title == created.title || CalendarRepo.setTitle(context, id, title)) &&
+                    ((start == created.start && end == created.end) || CalendarRepo.updateTimes(context, id, start, end))
+            }
+            is Target.Notion -> runCatching {
+                if (title != created.title) NotionRepo.setTitle(t.db, created.ref, title)
+                if (start != created.start || end != created.end) NotionRepo.setTimes(t.db, created.ref, start, end, created.allDay)
+            }.isSuccess
+        }
         Agenda.afterWrite()
         return ok
     }
 
     suspend fun delete(context: Context, item: AgendaItem): Boolean {
-        val src = item.source as? Source.Calendar ?: return false
         Agenda.removeLocal(item.key)
-        val ok = CalendarRepo.delete(context, src.eventId)
+        val ok = when (val src = item.source) {
+            is Source.Calendar -> CalendarRepo.delete(context, src.eventId)
+            is Source.Notion -> runCatching { NotionRepo.archive(src.pageId) }.isSuccess
+        }
         if (!ok) Agenda.applyLocal(item)
         return ok
     }

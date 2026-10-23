@@ -128,6 +128,9 @@ object NotionClient {
     suspend fun updatePage(pageId: String, properties: JsonObject): JsonObject =
         call("PATCH", "/pages/$pageId", buildJsonObject { put("properties", properties) })
 
+    suspend fun archivePage(pageId: String): JsonObject =
+        call("PATCH", "/pages/$pageId", buildJsonObject { put("archived", true) })
+
     suspend fun createPage(databaseId: String, properties: JsonObject): JsonObject =
         call("POST", "/pages", buildJsonObject {
             put("parent", buildJsonObject { put("database_id", databaseId) })

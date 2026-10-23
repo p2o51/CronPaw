@@ -234,6 +234,21 @@ object NotionRepo {
         return id
     }
 
+    suspend fun setTitle(db: NotionDb, pageId: String, title: String) {
+        val page = NotionClient.updatePage(pageId, buildJsonObject {
+            put(db.titleProp, buildJsonObject {
+                put("title", buildJsonArray { add(buildJsonObject { put("text", buildJsonObject { put("content", title) }) }) })
+            })
+        })
+        pages[pageId] = page
+    }
+
+    /** Notion has no delete through the API: the page goes to the trash. */
+    suspend fun archive(pageId: String) {
+        NotionClient.archivePage(pageId)
+        pages.remove(pageId)
+    }
+
     private fun dateJson(start: Long, end: Long, allDay: Boolean) = buildJsonObject {
         val zone = ZoneId.systemDefault()
         if (allDay) {
