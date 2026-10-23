@@ -50,8 +50,14 @@ object AppSettings {
     /** Pinned item keys (AgendaItem.key), newline separated. */
     val pins = key("pins", "")
 
-    // ── Notion (BYOK internal integration token) ───────────────────────────
+    // ── Notion (OAuth through the relay Worker) ────────────────────────────
+    /** The access token. */
     val notionToken = key("notion_token", "")
+    /** Notion rotates it on every refresh. */
+    val notionRefreshToken = key("notion_refresh_token", "")
+    val notionWorkspace = key("notion_workspace", "")
+    /** The state of a sign-in in flight, checked on the callback. */
+    val notionOAuthState = key("notion_oauth_state", "")
     /** Configured databases, JSON (core/notion/NotionDatabases). */
     val notionDatabases = key("notion_databases", "[]")
 

@@ -74,7 +74,7 @@ private fun Picker(nav: Nav, onPick: (String) -> Unit) {
     var list by remember { mutableStateOf<List<DatabaseSummary>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
-        if (!NotionClient.hasToken) { error = "先在设置里填 Notion token"; return@LaunchedEffect }
+        if (!NotionClient.hasToken) { error = "先在设置里连接 Notion"; return@LaunchedEffect }
         runCatching { NotionClient.searchDatabases() }
             .onSuccess { all -> list = all.filter { s -> NotionRepo.db(s.id) == null } }
             .onFailure { error = it.message ?: "连不上 Notion" }
@@ -87,7 +87,7 @@ private fun Picker(nav: Nav, onPick: (String) -> Unit) {
             Button(onClick = { nav.pop(); nav.push("settings") }) { Text("去设置") }
         }
         l == null -> LoadingState()
-        l.isEmpty() -> Text("没有可添加的数据库。在 Notion 里把数据库分享给你的集成。", Modifier.padding(24.dp), color = cs.onSurfaceVariant)
+        l.isEmpty() -> Text("没有可添加的数据库。到设置里重新连接 Notion，在授权页勾上要用的数据库。", Modifier.padding(24.dp), color = cs.onSurfaceVariant)
         else -> Column(Modifier.verticalScroll(rememberScrollState()).padding(12.dp)) {
             l.forEach { db ->
                 Row(

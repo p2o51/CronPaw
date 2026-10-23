@@ -23,30 +23,25 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import com.gpo.cronpaw.BuildConfig
 import com.gpo.cronpaw.core.agenda.Agenda
-import com.gpo.cronpaw.core.notion.NotionClient
+import com.gpo.cronpaw.core.notion.NotionOAuth
 import com.gpo.cronpaw.core.notion.NotionRepo
 import com.gpo.cronpaw.core.settings.AppSettings
 import com.gpo.cronpaw.navigation.Nav
 import com.gpo.cronpaw.ui.components.PawTopBar
 import com.gpo.cronpaw.ui.components.rememberToast
-import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(nav: Nav) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val toast = rememberToast()
     val cs = MaterialTheme.colorScheme
 
@@ -58,32 +53,29 @@ fun SettingsScreen(nav: Nav) {
     val autoSave by AppSettings.autoSaveSeconds.state.collectAsState()
     val themeMode by AppSettings.themeMode.state.collectAsState()
     val dynamic by AppSettings.dynamicColor.state.collectAsState()
-    var checking by remember { mutableStateOf(false) }
+    val workspace by AppSettings.notionWorkspace.state.collectAsState()
+    val oauthStatus by NotionOAuth.status.collectAsState()
+    val uriHandler = LocalUriHandler.current
 
     Column(Modifier.fillMaxSize().background(cs.surface)) {
         PawTopBar("设置", onBack = { nav.pop() })
         Column(Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             Section("Notion") {
-                Field("Integration token", token, { AppSettings.set(AppSettings.notionToken, it.trim()) }, secret = true, placeholder = "ntn_…")
-                Hint("在 notion.so/profile/integrations 建一个内部集成，把要用的数据库分享给它。")
-                FilledTonalButton(
-                    enabled = token.isNotBlank() && !checking,
-                    onClick = {
-                        checking = true
-                        scope.launch {
-                            runCatching { NotionClient.searchDatabases() }
-                                .onSuccess { toast("能看到 ${it.size} 个数据库") }
-                                .onFailure { toast(it.message ?: "连不上") }
-                            checking = false
-                        }
-                    },
-                ) { Text(if (checking) "检查中" else "检查") }
+                if (token.isBlank()) {
+                    Hint("在 Notion 的授权页里勾上要放进日历的数据库。")
+                    FilledTonalButton(onClick = { uriHandler.openUri(NotionOAuth.begin().toString()) }) { Text("连接 Notion") }
+                } else {
+                    Row2("已连接", workspace.ifBlank { null })
+                    Row2("重新授权", onClick = { uriHandler.openUri(NotionOAuth.begin().toString()) })
+                }
+                oauthStatus?.let { Hint(it) }
                 dbs.forEach { db ->
                     Row2(db.title, if (db.enabled) null else "已隐藏", onClick = { nav.push("db:${db.id}") }, leading = {
                         Box(Modifier.size(16.dp).clip(RoundedCornerShape(5.dp)).background(Color(db.color)))
                     })
                 }
                 Row2("添加数据库", onClick = { nav.push("db:") })
+                if (token.isNotBlank()) Row2("断开 Notion", onClick = { NotionOAuth.disconnect(); Agenda.refresh(); toast("已断开") })
             }
 
             Section("语音") {

@@ -24,8 +24,8 @@ import java.util.concurrent.TimeUnit
 class NotionException(message: String, val status: Int = 0) : Exception(message)
 
 /**
- * The Notion REST API with the user's own internal-integration token (设置 › Notion).
- * Databases must be shared with that integration in Notion first.
+ * The Notion REST API with the OAuth access token from [NotionOAuth]. The databases the
+ * user picked on Notion's consent page are the ones it can see.
  */
 object NotionClient {
     private const val Base = "https://api.notion.com/v1"
@@ -40,9 +40,20 @@ object NotionClient {
 
     val hasToken: Boolean get() = AppSettings.notionToken.value.isNotBlank()
 
-    private suspend fun call(method: String, path: String, body: JsonElement? = null): JsonObject = withContext(Dispatchers.IO) {
+    private suspend fun call(method: String, path: String, body: JsonElement? = null): JsonObject {
         val token = AppSettings.notionToken.value.trim()
-        if (token.isEmpty()) throw NotionException("no token")
+        if (token.isEmpty()) throw NotionException("还没连接 Notion")
+        return try {
+            send(token, method, path, body)
+        } catch (e: NotionException) {
+            // An expired access token: refresh once through the relay and try again.
+            if (e.status != 401) throw e
+            val fresh = NotionOAuth.refreshAfter(token) ?: throw NotionException("Notion 需要重新连接", 401)
+            send(fresh, method, path, body)
+        }
+    }
+
+    private suspend fun send(token: String, method: String, path: String, body: JsonElement?): JsonObject = withContext(Dispatchers.IO) {
         val req = Request.Builder()
             .url("$Base$path")
             .header("Authorization", "Bearer $token")
