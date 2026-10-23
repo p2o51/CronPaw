@@ -41,6 +41,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -121,6 +122,7 @@ fun CreateSheet(
     var minutes by remember { mutableIntStateOf(draft.minutes) }
     var touched by remember { mutableStateOf(draft.typed || draft.editing != null) }
     var saving by remember { mutableStateOf(false) }
+    var allDay by remember { mutableStateOf(draft.editing?.allDay ?: false) }
 
     val voice = remember { Voice.create(context, scope) }
     val heard by voice.text.collectAsState()
@@ -158,15 +160,16 @@ fun CreateSheet(
         if (title.isBlank() || saving) return
         saving = true
         scope.launch {
-            val end = effStart + effMinutes * 60_000L
+            val begin = if (allDay) Times.startOf(Times.date(effStart)) else effStart
+            val end = if (allDay) Times.startOf(Times.date(effStart).plusDays(1)) else effStart + effMinutes * 60_000L
             val editing = draft.editing
             if (editing != null) {
-                if (Actions.edit(context, editing, title, effStart, end)) {
+                if (Actions.edit(context, editing, title, begin, end)) {
                     haptics.chargeFull()
                     onDismiss()
                 } else toast("没改成")
             } else {
-                val created = Actions.create(context, t, title, effStart, end)
+                val created = Actions.create(context, t, title, begin, end, allDay)
                 if (created != null) {
                     haptics.chargeFull()
                     onSaved(created, auto)
@@ -257,6 +260,8 @@ fun CreateSheet(
                         countdown = !touched && AppSettings.autoSaveSeconds.value > 0 && title.isNotBlank(),
                         saving = saving,
                         editing = draft.editing != null,
+                        allDay = allDay,
+                        onAllDay = { allDay = it },
                         onSave = { save(auto = it) },
                     )
                 }
@@ -395,6 +400,8 @@ private fun ConfirmStage(
     countdown: Boolean,
     saving: Boolean,
     editing: Boolean,
+    allDay: Boolean,
+    onAllDay: (Boolean) -> Unit,
     onSave: (auto: Boolean) -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -434,8 +441,56 @@ private fun ConfirmStage(
         Spacer(Modifier.height(12.dp))
         val day = Times.date(start)
         Stepper("日期", Times.dayLabel(day), onMinus = { haptics.tick(); onStart(start - 86_400_000L) }, onPlus = { haptics.tick(); onStart(start + 86_400_000L) })
-        Stepper("开始", Times.hm(start), onMinus = { haptics.tick(); onStart(start - 15 * 60_000L) }, onPlus = { haptics.tick(); onStart(start + 15 * 60_000L) })
-        Stepper("时长", Times.durationText(minutes), onMinus = { haptics.tick(); onMinutes((minutes - 15).coerceAtLeast(5)) }, onPlus = { haptics.tick(); onMinutes(minutes + 15) })
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(cs.surfaceContainer)
+                .padding(start = 16.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("全天", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Switch(allDay, { haptics.tick(); onAllDay(it) })
+        }
+        if (!allDay) {
+            Stepper("开始", Times.hm(start), onMinus = { haptics.tick(); onStart(start - 15 * 60_000L) }, onPlus = { haptics.tick(); onStart(start + 15 * 60_000L) })
+            Stepper("时长", Times.durationText(minutes), onMinus = { haptics.tick(); onMinutes((minutes - 15).coerceAtLeast(5)) }, onPlus = { haptics.tick(); onMinutes(minutes + 15) })
+            // The usual lengths one tap away; 「默认」 keeps the choice for the next tap on the timeline.
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val defaultMinutes = AppSettings.defaultMinutes.state.collectAsState().value
+                listOf(15, 30, 45, 60, 90, 120).forEach { m ->
+                    val on = m == minutes
+                    val (v, u) = Times.duration(m)
+                    Row(
+                        Modifier
+                            .clip(CircleShape)
+                            .background(if (on) cs.primary else cs.surfaceContainerHighest)
+                            .clickable { haptics.tick(); onMinutes(m) }
+                            .padding(horizontal = 12.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        Text(v, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = if (on) cs.onPrimary else cs.onSurface)
+                        Text(u, Modifier.padding(start = 1.dp), style = MaterialTheme.typography.labelSmall, color = if (on) cs.onPrimary.copy(alpha = 0.7f) else cs.onSurfaceVariant)
+                    }
+                }
+                if (minutes != defaultMinutes) {
+                    Text(
+                        "设为默认",
+                        Modifier
+                            .clip(CircleShape)
+                            .clickable { haptics.tick(); AppSettings.set(AppSettings.defaultMinutes, minutes) }
+                            .padding(horizontal = 10.dp, vertical = 7.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = cs.primary,
+                    )
+                }
+            }
+        }
         Spacer(Modifier.height(16.dp))
         Box(
             Modifier

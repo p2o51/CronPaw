@@ -3,6 +3,7 @@ package com.gpo.cronpaw.feature.home
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import com.gpo.cronpaw.core.settings.AppSettings
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -91,6 +92,8 @@ fun Timeline(
     items: List<AgendaItem>,
     onItem: (AgendaItem) -> Unit,
     onToggleDone: (AgendaItem) -> Unit,
+    /** A tap on an empty part of a day: the quarter hour under the finger. */
+    onSlot: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -196,6 +199,7 @@ fun Timeline(
                                 hourDp = state.hourDp,
                                 onItem = onItem,
                                 onToggleDone = onToggleDone,
+                                onSlot = onSlot,
                                 modifier = Modifier.weight(1f).fillMaxHeight(),
                             )
                         }
@@ -336,6 +340,7 @@ private fun DayColumn(
     hourDp: Dp,
     onItem: (AgendaItem) -> Unit,
     onToggleDone: (AgendaItem) -> Unit,
+    onSlot: (Long) -> Unit,
     modifier: Modifier,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -344,7 +349,15 @@ private fun DayColumn(
     val todayTint = cs.primary.copy(alpha = 0.05f)
     val placed = remember(items, day) { place(items, day) }
     BoxWithConstraints(
-        modifier.drawBehind {
+        modifier
+            .pointerInput(day, hourDp) {
+                // Items take their own taps; what reaches here is empty time.
+                detectTapGestures { pos ->
+                    val minute = ((pos.y / hourDp.toPx()) * 60f).toInt() / 15 * 15
+                    onSlot(Times.at(day, minute.coerceIn(0, 24 * 60 - 15)))
+                }
+            }
+            .drawBehind {
             if (today) drawRect(todayTint)
             // Every other hour a quiet band: rhythm without lines.
             val h = size.height / 24f

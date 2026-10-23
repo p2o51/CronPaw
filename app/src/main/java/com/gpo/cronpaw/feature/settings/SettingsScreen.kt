@@ -51,6 +51,7 @@ fun SettingsScreen(nav: Nav) {
     val model by AppSettings.scribeModel.state.collectAsState()
     val quick by AppSettings.quickEntries.state.collectAsState()
     val autoSave by AppSettings.autoSaveSeconds.state.collectAsState()
+    val defaultMinutes by AppSettings.defaultMinutes.state.collectAsState()
     val themeMode by AppSettings.themeMode.state.collectAsState()
     val dynamic by AppSettings.dynamicColor.state.collectAsState()
     val workspace by AppSettings.notionWorkspace.state.collectAsState()
@@ -88,6 +89,13 @@ fun SettingsScreen(nav: Nav) {
 
             Section("快捷入口") {
                 Field("每行一个：标题|分钟", quick, { AppSettings.set(AppSettings.quickEntries, it) }, singleLine = false)
+            }
+
+            Section("点时间轴新建") {
+                Choices(listOf(15 to "15 分钟", 30 to "30 分钟", 45 to "45 分钟", 60 to "1 小时", 90 to "1.5 小时", 120 to "2 小时"), defaultMinutes) {
+                    AppSettings.set(AppSettings.defaultMinutes, it)
+                }
+                Hint("点时间轴的空白处，从那里开始新建，默认这么长。")
             }
 
             Section("自动加入") {

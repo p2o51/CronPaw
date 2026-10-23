@@ -73,6 +73,8 @@ object AppSettings {
     val scribeModel = key("scribe_model", "scribe_v2")
     /** 快捷入口 on the voice sheet: "title|minutes" lines. */
     val quickEntries = key("quick_entries", "简单专注|25\n简单工作|60\n午饭|45\n运动|30")
+    /** Length of an item made by tapping the timeline, in minutes. */
+    val defaultMinutes = key("default_minutes", 60)
     /** Seconds before a confirmed item saves itself when the screen is left alone. */
     val autoSaveSeconds = key("auto_save_seconds", 4)
 

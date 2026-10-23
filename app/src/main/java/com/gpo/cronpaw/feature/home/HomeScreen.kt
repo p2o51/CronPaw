@@ -343,7 +343,22 @@ fun HomeScreen(nav: Nav) {
                 when (shown) {
                     AppSettings.ViewMonth -> MonthView(monthPager, items, onDay = { haptics.tick(); openOnTimeline(it) }, modifier = viewModifier)
                     AppSettings.ViewSchedule -> ScheduleView(scheduleList, scheduleRows, onItem, onToggleDone, modifier = viewModifier)
-                    else -> Timeline(state = tl, items = items, onItem = onItem, onToggleDone = onToggleDone, modifier = viewModifier)
+                    else -> Timeline(
+                        state = tl,
+                        items = items,
+                        onItem = onItem,
+                        onToggleDone = onToggleDone,
+                        // Tap on empty time: a new item from there, the default length, marked on the timeline.
+                        onSlot = { start ->
+                            if (carried != null || draft != null) return@Timeline
+                            if (trayOpen) { trayOpen = false; customEditing = false; return@Timeline }
+                            haptics.tick()
+                            val minutes = AppSettings.defaultMinutes.value
+                            tl.ghost = Ghost(start, minutes)
+                            draft = Draft(start, minutes, typed = true)
+                        },
+                        modifier = viewModifier,
+                    )
                 }
             }
 
@@ -442,6 +457,7 @@ fun HomeScreen(nav: Nav) {
             draft = d,
             onSaved = { created, _ ->
                 draft = null
+                tl.ghost = null
                 rootScope.launch {
                     snackbar.currentSnackbarData?.dismiss()
                     val r = snackbar.showSnackbar("已加入  ${created.title}", actionLabel = "编辑", duration = SnackbarDuration.Short)
@@ -455,7 +471,7 @@ fun HomeScreen(nav: Nav) {
                     }
                 }
             },
-            onDismiss = { draft = null },
+            onDismiss = { draft = null; tl.ghost = null },
         )
     }
 }
