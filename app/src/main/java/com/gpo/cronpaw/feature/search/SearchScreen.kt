@@ -89,9 +89,9 @@ object DateQuery {
     private fun ranges(d: LocalDate, days: Int, primaryOnly: Boolean): List<RangeCandidate> {
         fun r(from: LocalDate, note: String) = RangeCandidate(from, from.plusDays((days - 1).toLong()), note)
         return when (days) {
-            1 -> listOf(r(d, ""))
+            AppSettings.ViewMonth -> listOf(RangeCandidate(d.withDayOfMonth(1), d.withDayOfMonth(d.lengthOfMonth()), "月"))
+            AppSettings.ViewSchedule, 1 -> listOf(RangeCandidate(d, d, ""))
             7 -> listOf(r(Times.monday(d), "周"))
-            2 -> if (primaryOnly) listOf(r(d, "")) else listOf(r(d, "从这天"), r(d.minusDays(1), "到这天"))
             else -> {
                 val half = (days - 1) / 2
                 val centre = r(d.minusDays(half.toLong()), "居中")

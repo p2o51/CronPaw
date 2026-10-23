@@ -14,6 +14,12 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import java.time.YearMonth
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.scrollBy
@@ -108,9 +114,34 @@ fun HomeScreen(nav: Nav) {
     val cs = MaterialTheme.colorScheme
 
     val viewDays by AppSettings.viewDays.state.collectAsState()
-    val tl = rememberTimelineState(viewDays)
-    LaunchedEffect(viewDays) { if (tl.days != viewDays) tl.switchDays(viewDays) }
+    val tl = rememberTimelineState(if (viewDays > 0) viewDays else AppSettings.timelineDays.value)
+    val monthPager = rememberPagerState(initialPage = MonthMid) { MonthMid * 2 }
+    val scheduleList = rememberLazyListState()
     val items by Agenda.items.collectAsState()
+    val scheduleRows = remember(items) { scheduleRows(items) }
+
+    // ── Switching views: the old one fades and shrinks a little, the new one springs in ──
+    var shown by remember { mutableIntStateOf(viewDays) }
+    val viewIn = remember { Animatable(1f) }
+    LaunchedEffect(viewDays) {
+        if (viewDays == 2) { AppSettings.set(AppSettings.viewDays, 3); return@LaunchedEffect } // 2 天 is gone
+        if (shown == viewDays) return@LaunchedEffect
+        viewIn.animateTo(0f, spring(stiffness = Spring.StiffnessHigh))
+        when {
+            viewDays > 0 -> { if (tl.days != viewDays) tl.switchDays(viewDays) }
+            viewDays == AppSettings.ViewMonth -> monthPager.scrollToPage(monthPage(YearMonth.from(if (shown > 0) tl.first else LocalDate.now())))
+            viewDays == AppSettings.ViewSchedule -> scheduleList.scrollToItem(scheduleIndexOf(scheduleRows, if (shown > 0) tl.first else LocalDate.now()))
+        }
+        shown = viewDays
+        viewIn.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow))
+    }
+    fun openOnTimeline(date: LocalDate) {
+        val days = AppSettings.timelineDays.value.takeIf { it > 0 } ?: 3
+        scope.launch {
+            tl.show(date, animate = false)
+            AppSettings.set(AppSettings.viewDays, days)
+        }
+    }
 
     // ── Calendar permission ──
     var hasCalendar by remember {
@@ -126,7 +157,7 @@ fun HomeScreen(nav: Nav) {
 
     // Load what is on screen (and a margin) whenever the page moves.
     LaunchedEffect(tl) {
-        snapshotFlow { tl.first to tl.last }.collect { (a, b) -> Agenda.ensure(a, b) }
+        snapshotFlow { Triple(tl.first, tl.last, shown > 0) }.collect { (a, b, onTimeline) -> if (onTimeline) Agenda.ensure(a, b) }
     }
 
     // ── Sheets ──
@@ -138,9 +169,14 @@ fun HomeScreen(nav: Nav) {
         HomeRequests.jump.collect { j ->
             if (j == null) return@collect
             HomeRequests.jump.value = null
-            if (j.exactFirst) tl.showFrom(j.date) else tl.show(j.date)
+            when {
+                shown == AppSettings.ViewMonth -> monthPager.animateScrollToPage(monthPage(YearMonth.from(j.date)))
+                shown == AppSettings.ViewSchedule -> scheduleList.animateScrollToItem(scheduleIndexOf(scheduleRows, j.date))
+                j.exactFirst -> tl.showFrom(j.date)
+                else -> tl.show(j.date)
+            }
             j.open?.let { item ->
-                if (!item.allDay) tl.scrollToMinute(Times.minuteOfDay(item.start) - 60)
+                if (shown > 0 && !item.allDay) tl.scrollToMinute(Times.minuteOfDay(item.start) - 60)
                 selected = item
             }
         }
@@ -227,7 +263,10 @@ fun HomeScreen(nav: Nav) {
         drawerContent = {
             CalendarDrawer(
                 viewDays = viewDays,
-                onViewDays = { AppSettings.set(AppSettings.viewDays, it) },
+                onViewDays = {
+                    AppSettings.set(AppSettings.viewDays, it)
+                    if (it > 0) AppSettings.set(AppSettings.timelineDays, it)
+                },
                 onAddDatabase = { scope.launch { drawer.close() }; nav.push("db:") },
                 onSettings = { scope.launch { drawer.close() }; nav.push("settings") },
             )
@@ -235,15 +274,37 @@ fun HomeScreen(nav: Nav) {
     ) {
         Box(Modifier.fillMaxSize().background(cs.surface)) {
             Column(Modifier.fillMaxSize().statusBarsPadding()) {
+                // What the header names: the days, the month, or the day at the top of 日程.
+                val (first, last) = when {
+                    shown == AppSettings.ViewMonth -> monthOf(monthPager.currentPage).let { it.atDay(1) to it.atEndOfMonth() }
+                    shown == AppSettings.ViewSchedule -> {
+                        val row = scheduleRows.getOrNull(scheduleList.firstVisibleItemIndex)
+                        val d = when (row) {
+                            is ScheduleRow.Day -> row.date
+                            is ScheduleRow.Month -> row.month.atDay(1)
+                            null -> LocalDate.now()
+                        }
+                        d to d
+                    }
+                    else -> tl.first to tl.last
+                }
                 Header(
-                    first = tl.first,
-                    last = tl.last,
+                    first = first,
+                    last = last,
+                    showRange = shown > 1,
                     onMenu = { scope.launch { drawer.open() } },
                     onToday = {
                         haptics.tick()
                         scope.launch {
-                            tl.show(LocalDate.now())
-                            tl.scrollToMinute(Times.minuteOfDay(System.currentTimeMillis()) - 90)
+                            val today = LocalDate.now()
+                            when (shown) {
+                                AppSettings.ViewMonth -> monthPager.animateScrollToPage(MonthMid)
+                                AppSettings.ViewSchedule -> scheduleList.animateScrollToItem(scheduleIndexOf(scheduleRows, today))
+                                else -> {
+                                    tl.show(today)
+                                    tl.scrollToMinute(Times.minuteOfDay(System.currentTimeMillis()) - 90)
+                                }
+                            }
                         }
                     },
                     onSearch = { nav.push("search") },
@@ -263,19 +324,27 @@ fun HomeScreen(nav: Nav) {
                         }) { Text("允许") }
                     }
                 }
-                Timeline(
-                    state = tl,
-                    items = items,
-                    onItem = { haptics.tick(); selected = it },
-                    onToggleDone = { item ->
-                        haptics.tick()
-                        scope.launch {
-                            val ok = Actions.setDone(item, !item.done)
-                            if (!ok) toast("没改成") else if (!item.done) haptics.chargeFull()
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                )
+                val onItem: (AgendaItem) -> Unit = { haptics.tick(); selected = it }
+                val onToggleDone: (AgendaItem) -> Unit = { item ->
+                    haptics.tick()
+                    scope.launch {
+                        val ok = Actions.setDone(item, !item.done)
+                        if (!ok) toast("没改成") else if (!item.done) haptics.chargeFull()
+                    }
+                }
+                val viewModifier = Modifier
+                    .weight(1f)
+                    .graphicsLayer {
+                        alpha = viewIn.value
+                        val s = 0.94f + 0.06f * viewIn.value
+                        scaleX = s
+                        scaleY = s
+                    }
+                when (shown) {
+                    AppSettings.ViewMonth -> MonthView(monthPager, items, onDay = { haptics.tick(); openOnTimeline(it) }, modifier = viewModifier)
+                    AppSettings.ViewSchedule -> ScheduleView(scheduleList, scheduleRows, onItem, onToggleDone, modifier = viewModifier)
+                    else -> Timeline(state = tl, items = items, onItem = onItem, onToggleDone = onToggleDone, modifier = viewModifier)
+                }
             }
 
             // Tapping outside the tray closes it (and leaves the custom bar's edit state).
@@ -330,15 +399,31 @@ fun HomeScreen(nav: Nav) {
                 Icon(YoinSymbols.Add, "新建", Modifier.size(28.dp).graphicsLayer { rotationZ = fabRotation }, tint = cs.onPrimaryContainer)
             }
 
-            // The bar under the finger, until it is over the timeline (then the ghost shows).
+            // The bar under the finger: it pops up out of the tray when lifted and tilts a
+            // little, then hands over to the ghost once it is over the timeline.
             val c = carried
+            val lift = remember { Animatable(0f) }
+            LaunchedEffect(c != null) {
+                if (c != null) {
+                    lift.snapTo(0f)
+                    lift.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMedium))
+                } else lift.snapTo(0f)
+            }
             if (c != null && tl.ghost == null) {
                 val (value, unit) = Times.duration(c.first)
                 Box(
                     Modifier
                         .offset { IntOffset((c.second.x - 60.dp.toPx()).roundToInt(), (c.second.y - 28.dp.toPx()).roundToInt()) }
                         .size(120.dp, 44.dp)
-                        .clip(RoundedCornerShape(14.dp))
+                        .graphicsLayer {
+                            val v = lift.value
+                            scaleX = 0.7f + 0.3f * v
+                            scaleY = 0.7f + 0.3f * v
+                            rotationZ = -4f * v
+                            shadowElevation = 12.dp.toPx() * v
+                            shape = RoundedCornerShape(14.dp)
+                            clip = true
+                        }
                         .background(cs.primary),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -376,7 +461,7 @@ fun HomeScreen(nav: Nav) {
 }
 
 @Composable
-private fun Header(first: LocalDate, last: LocalDate, onMenu: () -> Unit, onToday: () -> Unit, onSearch: () -> Unit) {
+private fun Header(first: LocalDate, last: LocalDate, showRange: Boolean, onMenu: () -> Unit, onToday: () -> Unit, onSearch: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val today = LocalDate.now()
     Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -388,7 +473,7 @@ private fun Header(first: LocalDate, last: LocalDate, onMenu: () -> Unit, onToda
         )
         Spacer(Modifier.width(10.dp))
         // First and last day on screen, stacked.
-        if (first != last) {
+        if (showRange && first != last) {
             Column(
                 Modifier.clip(RoundedCornerShape(10.dp)).background(cs.surfaceContainerHigh).padding(horizontal = 8.dp, vertical = 2.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,

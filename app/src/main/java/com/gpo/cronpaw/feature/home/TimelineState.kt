@@ -13,7 +13,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import com.gpo.cronpaw.core.settings.AppSettings
 import com.gpo.cronpaw.ui.time.Times
+import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlin.math.floor
@@ -52,6 +54,8 @@ class TimelineState(
     var columnsOrigin by mutableStateOf(Offset.Zero)
     var columnsWidth by mutableIntStateOf(0)
     var hourPx by mutableStateOf(1f)
+    /** Pinch changes it; kept between launches. */
+    var hourDp by mutableStateOf(AppSettings.hourHeight.value.dp)
     /** The visible part of the timeline (below the header). */
     var viewport by mutableStateOf(Rect.Zero)
 

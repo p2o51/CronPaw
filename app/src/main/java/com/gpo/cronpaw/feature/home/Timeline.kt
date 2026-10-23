@@ -3,6 +3,14 @@ package com.gpo.cronpaw.feature.home
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import com.gpo.cronpaw.core.settings.AppSettings
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.animation.core.animateDpAsState
 import kotlinx.coroutines.launch
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.draw.clipToBounds
@@ -69,7 +77,8 @@ import kotlinx.coroutines.delay
 import java.time.LocalDate
 import kotlin.math.max
 
-val HourHeight = 60.dp
+val MinHour = 28.dp
+val MaxHour = 160.dp
 private val Gutter = 40.dp
 
 /**
@@ -85,7 +94,7 @@ fun Timeline(
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
-    state.hourPx = with(density) { HourHeight.toPx() }
+    state.hourPx = with(density) { state.hourDp.toPx() }
     // Minute ticks so the now line moves.
     val now = remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -155,13 +164,14 @@ fun Timeline(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .onGloballyPositioned { state.viewport = it.boundsInRoot() },
+                .onGloballyPositioned { state.viewport = it.boundsInRoot() }
+                .pinchToZoomHours(state),
         ) {
             Row(Modifier.fillMaxWidth().verticalScroll(state.scroll)) {
-                HourGutter()
+                HourGutter(state.hourDp)
                 HorizontalPager(
                     state.pager,
-                    Modifier.weight(1f).height(HourHeight * 24),
+                    Modifier.weight(1f).height(state.hourDp * 24),
                     beyondViewportPageCount = 1,
                     key = { it },
                 ) { page ->
@@ -183,6 +193,7 @@ fun Timeline(
                                 items = byDay[day].orEmpty().filter { !it.allDay },
                                 now = now.longValue,
                                 ghost = state.ghost?.takeIf { Times.date(it.start) == day },
+                                hourDp = state.hourDp,
                                 onItem = onItem,
                                 onToggleDone = onToggleDone,
                                 modifier = Modifier.weight(1f).fillMaxHeight(),
@@ -256,11 +267,11 @@ private fun DayHeader(day: LocalDate, allDay: List<AgendaItem>, onItem: (AgendaI
 }
 
 @Composable
-private fun HourGutter() {
+private fun HourGutter(hourDp: Dp) {
     val cs = MaterialTheme.colorScheme
     Column(Modifier.width(Gutter)) {
         for (h in 0 until 24) {
-            Box(Modifier.height(HourHeight).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+            Box(Modifier.height(hourDp).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                 if (h > 0) Text(
                     "$h",
                     Modifier.offset(y = (-7).dp),
@@ -322,6 +333,7 @@ private fun DayColumn(
     items: List<AgendaItem>,
     now: Long,
     ghost: Ghost?,
+    hourDp: Dp,
     onItem: (AgendaItem) -> Unit,
     onToggleDone: (AgendaItem) -> Unit,
     modifier: Modifier,
@@ -340,7 +352,6 @@ private fun DayColumn(
         },
     ) {
         val w = maxWidth
-        val hourDp = HourHeight
         for (p in placed) {
             val colW = w / p.cols
             ItemBlock(
@@ -350,14 +361,16 @@ private fun DayColumn(
                     .width(colW)
                     .height(hourDp * ((p.endMin - p.startMin) / 60f))
                     .padding(horizontal = 1.5.dp, vertical = 1.dp),
-                compact = (p.endMin - p.startMin) < 40,
+                compact = hourDp * ((p.endMin - p.startMin) / 60f) < 36.dp,
+                narrow = colW < 64.dp,
                 onClick = { onItem(p.item) },
                 onToggleDone = { onToggleDone(p.item) },
             )
         }
         if (ghost != null) {
-            val s = Times.minuteOfDay(ghost.start)
-            GhostBlock(ghost, Modifier.offset(y = hourDp * (s / 60f)).fillMaxWidth().height(hourDp * (ghost.minutes / 60f)))
+            // Glides from slot to slot instead of jumping a quarter hour at a time.
+            val y by animateDpAsState(hourDp * (Times.minuteOfDay(ghost.start) / 60f), YoinMotion.fastSpatialSpec(), label = "ghost")
+            GhostBlock(ghost, Modifier.offset(y = y).fillMaxWidth().height(hourDp * (ghost.minutes / 60f)))
         }
         if (today) {
             val m = Times.minuteOfDay(now)
@@ -370,8 +383,12 @@ private fun DayColumn(
 @Composable
 private fun GhostBlock(ghost: Ghost, modifier: Modifier) {
     val cs = MaterialTheme.colorScheme
+    val pop = remember { Animatable(0.6f) }
+    LaunchedEffect(Unit) { pop.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium)) }
     Box(
-        modifier.padding(1.5.dp).clip(RoundedCornerShape(10.dp)).background(cs.primary.copy(alpha = 0.85f)).padding(6.dp),
+        modifier
+            .graphicsLayer { scaleX = pop.value; scaleY = pop.value; alpha = pop.value.coerceAtMost(1f) }
+            .padding(1.5.dp).clip(RoundedCornerShape(10.dp)).background(cs.primary.copy(alpha = 0.85f)).padding(6.dp),
     ) {
         Text(
             "${Times.hm(ghost.start)}  ${Times.durationText(ghost.minutes)}",
@@ -387,6 +404,7 @@ private fun ItemBlock(
     item: AgendaItem,
     modifier: Modifier,
     compact: Boolean,
+    narrow: Boolean,
     onClick: () -> Unit,
     onToggleDone: () -> Unit,
 ) {
@@ -399,22 +417,28 @@ private fun ItemBlock(
             .clip(RoundedCornerShape(10.dp))
             .background(bg)
             .clickable(onClick = onClick)
-            .padding(horizontal = 5.dp, vertical = if (compact) 1.dp else 4.dp),
+            .padding(horizontal = if (narrow) 3.dp else 5.dp, vertical = if (compact) 1.dp else 4.dp),
     ) {
-        if (item.todo) {
-            TodoDot(item.done, Color(item.color), ink, onToggleDone, Modifier.padding(end = 4.dp, top = if (compact) 0.dp else 1.dp))
+        // A week on a phone: the dot would leave no room for the title.
+        if (item.todo && !(narrow && compact)) {
+            TodoDot(item.done, Color(item.color), ink, onToggleDone, Modifier.padding(end = if (narrow) 2.dp else 4.dp, top = if (compact) 0.dp else 1.dp))
         }
         Column(Modifier.weight(1f)) {
             Text(
                 item.title,
-                style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp, lineHeight = 14.sp),
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontSize = if (narrow) 10.sp else 12.sp,
+                    lineHeight = if (narrow) 12.sp else 14.sp,
+                ),
                 fontWeight = FontWeight.SemiBold,
                 color = ink,
-                maxLines = if (compact) 1 else 3,
-                overflow = TextOverflow.Ellipsis,
+                // Narrow columns clip instead of spending two characters on "…".
+                maxLines = if (compact) 1 else 8,
+                softWrap = !compact || !narrow,
+                overflow = if (narrow) TextOverflow.Clip else TextOverflow.Ellipsis,
                 textDecoration = if (item.done) TextDecoration.LineThrough else null,
             )
-            if (!compact) Text(
+            if (!compact && !narrow) Text(
                 Times.hm(item.start),
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                 color = ink.copy(alpha = 0.7f),
@@ -440,5 +464,38 @@ fun TodoDot(done: Boolean, color: Color, ink: Color, onClick: () -> Unit, modifi
         contentAlignment = Alignment.Center,
     ) {
         if (done) Icon(YoinSymbols.Check, null, Modifier.size(size - 4.dp).alpha(0.95f), tint = Color.White)
+    }
+}
+
+/**
+ * Two fingers change the hour height (one finger still scrolls and pages). The hour under
+ * the fingers stays under them.
+ */
+private fun Modifier.pinchToZoomHours(state: TimelineState): Modifier = pointerInput(state) {
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false)
+        var zooming = false
+        do {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            val pressed = event.changes.count { it.pressed }
+            if (pressed >= 2) {
+                zooming = true
+                val zoom = event.calculateZoom()
+                if (zoom != 1f) {
+                    val old = state.hourDp
+                    val next = (old * zoom).coerceIn(MinHour, MaxHour)
+                    val ratio = next / old
+                    val focusY = event.calculateCentroid(useCurrent = true).y
+                    val oldScroll = state.scroll.value.toFloat()
+                    state.hourDp = next
+                    state.hourPx = next.toPx()
+                    state.scroll.dispatchRawDelta((oldScroll + focusY) * ratio - focusY - oldScroll)
+                }
+                event.changes.forEach { it.consume() }
+            } else if (zooming) {
+                event.changes.forEach { it.consume() }
+            }
+        } while (event.changes.any { it.pressed })
+        if (zooming) AppSettings.set(AppSettings.hourHeight, state.hourDp.value.toInt())
     }
 }

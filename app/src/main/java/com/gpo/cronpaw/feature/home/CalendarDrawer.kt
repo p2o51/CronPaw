@@ -66,7 +66,7 @@ fun CalendarDrawer(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(cs.surfaceContainer).padding(4.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    listOf(1, 2, 3, 7).forEach { n ->
+                    listOf(1 to "1天", 3 to "3天", 7 to "周", AppSettings.ViewMonth to "月", AppSettings.ViewSchedule to "日程").forEach { (n, label) ->
                         val on = n == viewDays
                         val bg by animateColorAsState(if (on) cs.primary else Color.Transparent, YoinMotion.defaultEffectsSpec(), label = "days")
                         Box(
@@ -74,10 +74,13 @@ fun CalendarDrawer(
                                 .clickable { haptics.tick(); onViewDays(n) },
                             contentAlignment = Alignment.Center,
                         ) {
-                            Row(verticalAlignment = Alignment.Bottom) {
-                                Text(if (n == 7) "周" else "$n", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = if (on) cs.onPrimary else cs.onSurface)
-                                if (n != 7) Text("天", Modifier.padding(start = 1.dp, bottom = 1.dp), style = MaterialTheme.typography.labelSmall, color = if (on) cs.onPrimary.copy(alpha = 0.7f) else cs.onSurfaceVariant)
-                            }
+                            Text(
+                                label,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = if (on) cs.onPrimary else cs.onSurface,
+                                maxLines = 1,
+                            )
                         }
                     }
                 }

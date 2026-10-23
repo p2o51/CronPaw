@@ -41,8 +41,14 @@ object AppSettings {
     val coverColor = key("cover_color", true)
 
     // ── Calendar ───────────────────────────────────────────────────────────
-    /** Days on screen: 1, 2, 3 or 7 (周, Monday first). */
+    /** The view: 1, 3 or 7 days on the timeline (周 starts on Monday), [ViewMonth] or [ViewSchedule]. */
     val viewDays = key("view_days", 3)
+    const val ViewMonth = -1
+    const val ViewSchedule = -2
+    /** The last timeline length, for coming back from 月 / 日程. */
+    val timelineDays = key("timeline_days", 3)
+    /** Height of an hour on the timeline, in dp (pinch to change). */
+    val hourHeight = key("hour_height", 60)
     /** Calendar ids the user hid in the drawer, comma separated. */
     val hiddenCalendars = key("hidden_calendars", "")
     /** Default target for new items: "cal:<id>" or "notion:<databaseId>". */
