@@ -98,7 +98,7 @@ fun Timeline(
     Column(modifier) {
         Row(Modifier.fillMaxWidth()) {
             Spacer(Modifier.width(Gutter))
-            HorizontalPager(state.header, Modifier.weight(1f), userScrollEnabled = false, beyondViewportPageCount = 1) { page ->
+            HorizontalPager(state.header, Modifier.weight(1f), userScrollEnabled = false, verticalAlignment = Alignment.Top) { page ->
                 val first = state.firstDay(page)
                 Row(Modifier.fillMaxWidth()) {
                     for (i in 0 until state.days) {
