@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">CronPaw</string>
+    <string name="widget_agenda_label">今天</string>
+    <string name="widget_agenda_description">今天的日程和下一个</string>
+</resources>
