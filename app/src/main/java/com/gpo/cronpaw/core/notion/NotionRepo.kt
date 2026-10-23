@@ -118,6 +118,26 @@ object NotionRepo {
     suspend fun unscheduledCount(db: NotionDb): Int =
         runCatching { NotionClient.unscheduled(db.id, db.dateProp).count { !isDone(db, it) } }.getOrDefault(0)
 
+    /** Pages with no date yet, not done: the 未排期 tray. Start and end are 0. */
+    suspend fun unscheduledItems(db: NotionDb): List<AgendaItem> =
+        runCatching { NotionClient.unscheduled(db.id, db.dateProp) }.getOrDefault(emptyList())
+            .filter { !isDone(db, it) }
+            .map { page ->
+                val pageId = page.str("id")
+                pages[pageId] = page
+                val props = page["properties"]?.jsonObject
+                AgendaItem(
+                    key = "notion:$pageId",
+                    title = NotionClient.plainText(props?.get(db.titleProp)?.jsonObject?.get("title")).ifBlank { "（无标题）" },
+                    start = 0,
+                    end = 0,
+                    allDay = false,
+                    color = db.color,
+                    source = Source.Notion(db.id, pageId, page.str("url")),
+                    todo = db.statusProp != null,
+                )
+            }
+
     private fun toItem(db: NotionDb, page: JsonObject, zone: ZoneId): AgendaItem? {
         val props = page["properties"]?.jsonObject ?: return null
         val date = props[db.dateProp]?.jsonObject?.get("date") as? JsonObject ?: return null

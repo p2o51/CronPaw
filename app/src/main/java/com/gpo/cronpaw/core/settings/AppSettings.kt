@@ -43,6 +43,8 @@ object AppSettings {
     // ── Calendar ───────────────────────────────────────────────────────────
     /** The view: 1, 3 or 7 days on the timeline (周 starts on Monday), [ViewMonth] or [ViewSchedule]. */
     val viewDays = key("view_days", 3)
+    /** Set once a view is picked in the drawer; until then wide screens open on 周. */
+    val viewChosen = key("view_chosen", false)
     const val ViewMonth = -1
     const val ViewSchedule = -2
     /** The last timeline length, for coming back from 月 / 日程. */

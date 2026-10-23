@@ -5,6 +5,10 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -76,6 +80,7 @@ import com.gpo.cronpaw.core.agenda.Target
 import com.gpo.cronpaw.core.settings.AppSettings
 import com.gpo.cronpaw.ui.components.rememberToast
 import com.gpo.cronpaw.ui.theme.CronSymbols
+import com.gpo.cronpaw.ui.theme.YoinMotion
 import com.gpo.cronpaw.ui.theme.rememberRichHaptics
 import com.gpo.cronpaw.ui.time.Times
 import com.gpo.yoin.symbols.YoinSymbols
@@ -252,6 +257,7 @@ fun CreateSheet(
                         text = text,
                         onText = { text = it },
                         title = title,
+                        parsed = parsed,
                         start = effStart,
                         minutes = effMinutes,
                         focus = draft.typed || text.isBlank(),
@@ -392,6 +398,7 @@ private fun ConfirmStage(
     text: String,
     onText: (String) -> Unit,
     title: String,
+    parsed: Parsed,
     start: Long,
     minutes: Int,
     focus: Boolean,
@@ -435,8 +442,41 @@ private fun ConfirmStage(
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { onSave(false) }),
         )
-        if (title.isNotBlank() && title != text.trim()) {
-            Text(title, Modifier.padding(start = 16.dp, top = 6.dp), style = MaterialTheme.typography.labelLarge, color = cs.primary)
+        // What the words were read as, piece by piece, as they are typed.
+        val heardWhen = parsed.date != null || parsed.minute != null || parsed.minutes != null
+        val pieces = listOfNotNull(
+            parsed.date?.let { "日期" to Times.dayLabel(it) },
+            parsed.minute?.let { "开始" to Times.hm(start) },
+            parsed.minutes?.let { m -> Times.duration(m).let { (v, u) -> "时长" to "$v$u" } },
+            title.takeIf { heardWhen && it.isNotBlank() }?.let { "标题" to it },
+        )
+        val count = pieces.size
+        LaunchedEffect(count) { if (count > 0) haptics.lowTick() }
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).animateContentSize(YoinMotion.defaultSpatialSpec()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            listOf("日期", "开始", "时长", "标题").forEach { label ->
+                val piece = pieces.firstOrNull { it.first == label }
+                AnimatedVisibility(
+                    visible = piece != null,
+                    enter = fadeIn(YoinMotion.defaultEffectsSpec()) + scaleIn(YoinMotion.defaultSpatialSpec(), initialScale = 0.7f),
+                    exit = fadeOut(YoinMotion.fastEffectsSpec()) + scaleOut(YoinMotion.fastSpatialSpec(), targetScale = 0.7f),
+                ) {
+                    // Keeps the last value while it leaves.
+                    val shown = remember { mutableStateOf("") }.apply { piece?.let { value = it.second } }.value
+                    Row(
+                        Modifier.padding(top = 8.dp).clip(RoundedCornerShape(12.dp)).background(if (label == "标题") cs.surfaceContainerHighest else cs.primaryContainer)
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        val ink = if (label == "标题") cs.onSurface else cs.onPrimaryContainer
+                        Text(label, style = MaterialTheme.typography.labelSmall, color = ink.copy(alpha = 0.7f))
+                        Spacer(Modifier.width(4.dp))
+                        Text(shown, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = ink, maxLines = 1)
+                    }
+                }
+            }
         }
         Spacer(Modifier.height(12.dp))
         val day = Times.date(start)

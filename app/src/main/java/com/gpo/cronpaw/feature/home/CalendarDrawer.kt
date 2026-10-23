@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.PermanentDrawerSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -45,10 +46,12 @@ import com.gpo.yoin.symbols.YoinSymbols
  */
 @Composable
 fun CalendarDrawer(
+    permanent: Boolean,
     viewDays: Int,
     onViewDays: (Int) -> Unit,
     onAddDatabase: () -> Unit,
     onSettings: () -> Unit,
+    onUnscheduled: (String) -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     val haptics = rememberRichHaptics()
@@ -58,7 +61,11 @@ fun CalendarDrawer(
     val dbs by NotionRepo.databases.collectAsState()
     val unscheduled by Agenda.unscheduled.collectAsState()
 
-    ModalDrawerSheet(drawerContainerColor = cs.surfaceContainerLow) {
+    val sheet: @Composable (@Composable () -> Unit) -> Unit = { content ->
+        if (permanent) PermanentDrawerSheet(Modifier.width(300.dp), drawerContainerColor = cs.surfaceContainerLow) { content() }
+        else ModalDrawerSheet(drawerContainerColor = cs.surfaceContainerLow) { content() }
+    }
+    sheet {
         LazyColumn(Modifier.statusBarsPadding().navigationBarsPadding(), contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp)) {
             item {
                 Text("CronPaw", Modifier.padding(start = 12.dp, top = 8.dp, bottom = 16.dp), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -99,6 +106,7 @@ fun CalendarDrawer(
                         shown = shown,
                         title = cal.name,
                         trailing = null,
+                        onTrailing = {},
                         onClick = { haptics.tick(); Agenda.setCalendarHidden(cal.id, shown) },
                     )
                 }
@@ -111,6 +119,7 @@ fun CalendarDrawer(
                     shown = db.enabled,
                     title = db.title,
                     trailing = unscheduled[db.id]?.takeIf { it > 0 }?.toString(),
+                    onTrailing = { haptics.tick(); onUnscheduled(db.id) },
                     onClick = {
                         haptics.tick()
                         NotionRepo.update(db.id) { it.copy(enabled = !it.enabled) }
@@ -139,7 +148,7 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun ToggleRow(color: Color, shown: Boolean, title: String, trailing: String?, onClick: () -> Unit) {
+private fun ToggleRow(color: Color, shown: Boolean, title: String, trailing: String?, onTrailing: () -> Unit, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val fill by animateColorAsState(if (shown) color else color.copy(alpha = 0.18f), YoinMotion.defaultEffectsSpec(), label = "cal")
     Row(
@@ -165,7 +174,8 @@ private fun ToggleRow(color: Color, shown: Boolean, title: String, trailing: Str
         if (trailing != null) {
             Text(
                 trailing,
-                Modifier.clip(CircleShape).background(cs.surfaceContainerHighest).padding(horizontal = 8.dp, vertical = 2.dp),
+                // 未排期: tap the count to lay those pages out in a tray.
+                Modifier.clip(CircleShape).background(cs.secondaryContainer).clickable(onClick = onTrailing).padding(horizontal = 12.dp, vertical = 6.dp),
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
             )

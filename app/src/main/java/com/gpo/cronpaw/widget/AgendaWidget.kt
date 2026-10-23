@@ -11,7 +11,11 @@ import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.LocalSize
+import androidx.glance.action.ActionParameters
+import androidx.glance.action.actionParametersOf
 import androidx.glance.action.actionStartActivity
+import androidx.glance.appwidget.action.ActionCallback
+import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
@@ -35,6 +39,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.gpo.cronpaw.MainActivity
+import com.gpo.cronpaw.core.agenda.Actions
 import com.gpo.cronpaw.core.agenda.Agenda
 import com.gpo.cronpaw.core.agenda.AgendaItem
 import com.gpo.cronpaw.ui.time.Times
@@ -66,13 +71,14 @@ class AgendaGlance : GlanceAppWidget() {
         provideContent {
             GlanceTheme {
                 val items by Agenda.items.collectAsState()
-                Content(items)
+                val unscheduled by Agenda.unscheduled.collectAsState()
+                Content(items, unscheduled.values.sum())
             }
         }
     }
 
     @Composable
-    private fun Content(items: List<AgendaItem>) {
+    private fun Content(items: List<AgendaItem>, unscheduled: Int) {
         val now = System.currentTimeMillis()
         val today = LocalDate.now()
         val todayLeft = items.filter { !it.done && it.end > now && Times.date(it.start) <= today && Times.date(it.end - 1) >= today }
@@ -100,6 +106,12 @@ class AgendaGlance : GlanceAppWidget() {
                     style = TextStyle(fontSize = 13.sp, color = GlanceTheme.colors.onSurfaceVariant),
                 )
                 Spacer(GlanceModifier.defaultWeight())
+                // 未排期 across the databases, quieter than today's count.
+                if (unscheduled > 0) Text(
+                    "未排期 $unscheduled",
+                    modifier = GlanceModifier.padding(bottom = 5.dp, end = 8.dp),
+                    style = TextStyle(fontSize = 11.sp, color = GlanceTheme.colors.onSurfaceVariant),
+                )
                 if (todayLeft.isNotEmpty()) Text(
                     todayLeft.size.toString(),
                     modifier = GlanceModifier.padding(bottom = 4.dp),
@@ -120,7 +132,18 @@ class AgendaGlance : GlanceAppWidget() {
     @Composable
     private fun ItemRow(item: AgendaItem) {
         Row(GlanceModifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(GlanceModifier.width(4.dp).height(30.dp).cornerRadius(2.dp).background(ColorProvider(Color(item.color)))) {}
+            if (item.todo) {
+                // A todo's circle: tap to tick it off without opening the app.
+                Box(
+                    GlanceModifier.width(18.dp).height(18.dp).cornerRadius(9.dp).background(ColorProvider(Color(item.color)))
+                        .clickable(actionRunCallback<ToggleDone>(actionParametersOf(ToggleDone.Key to item.key))),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(GlanceModifier.width(14.dp).height(14.dp).cornerRadius(7.dp).background(GlanceTheme.colors.widgetBackground)) {}
+                }
+            } else {
+                Box(GlanceModifier.width(4.dp).height(30.dp).cornerRadius(2.dp).background(ColorProvider(Color(item.color)))) {}
+            }
             Spacer(GlanceModifier.width(8.dp))
             Column(GlanceModifier.defaultWeight()) {
                 Text(
@@ -135,5 +158,20 @@ class AgendaGlance : GlanceAppWidget() {
                 )
             }
         }
+    }
+}
+
+/** The todo circle on the widget: ticks the item off in its source. */
+class ToggleDone : ActionCallback {
+    override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
+        val key = parameters[Key] ?: return
+        Agenda.init(context)
+        val item = Agenda.items.value.firstOrNull { it.key == key } ?: return
+        Actions.setDone(item, !item.done)
+        WidgetSync.update(context)
+    }
+
+    companion object {
+        val Key = ActionParameters.Key<String>("key")
     }
 }

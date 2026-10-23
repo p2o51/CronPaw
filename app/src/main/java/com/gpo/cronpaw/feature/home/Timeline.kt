@@ -3,6 +3,10 @@ package com.gpo.cronpaw.feature.home
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import com.gpo.cronpaw.core.settings.AppSettings
 import androidx.compose.ui.input.pointer.pointerInput
@@ -78,6 +82,15 @@ import kotlinx.coroutines.delay
 import java.time.LocalDate
 import kotlin.math.max
 
+/** Long-press an item and carry it to a new time (all-day items stay put). */
+interface MoveDrag {
+    /** [grabY] is how far below the item's top the finger is, in px. */
+    fun start(item: AgendaItem, root: Offset, grabY: Float)
+    fun move(root: Offset)
+    fun drop()
+    fun cancel()
+}
+
 val MinHour = 28.dp
 val MaxHour = 160.dp
 private val Gutter = 40.dp
@@ -94,6 +107,8 @@ fun Timeline(
     onToggleDone: (AgendaItem) -> Unit,
     /** A tap on an empty part of a day: the quarter hour under the finger. */
     onSlot: (Long) -> Unit = {},
+    mover: MoveDrag? = null,
+    movingKey: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -200,6 +215,8 @@ fun Timeline(
                                 onItem = onItem,
                                 onToggleDone = onToggleDone,
                                 onSlot = onSlot,
+                                mover = mover,
+                                movingKey = movingKey,
                                 modifier = Modifier.weight(1f).fillMaxHeight(),
                             )
                         }
@@ -341,6 +358,8 @@ private fun DayColumn(
     onItem: (AgendaItem) -> Unit,
     onToggleDone: (AgendaItem) -> Unit,
     onSlot: (Long) -> Unit,
+    mover: MoveDrag?,
+    movingKey: String?,
     modifier: Modifier,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -378,6 +397,8 @@ private fun DayColumn(
                 narrow = colW < 64.dp,
                 onClick = { onItem(p.item) },
                 onToggleDone = { onToggleDone(p.item) },
+                mover = mover?.takeIf { !p.item.key.startsWith("new:") },
+                lifted = p.item.key == movingKey,
             )
         }
         if (ghost != null) {
@@ -420,13 +441,34 @@ private fun ItemBlock(
     narrow: Boolean,
     onClick: () -> Unit,
     onToggleDone: () -> Unit,
+    mover: MoveDrag? = null,
+    lifted: Boolean = false,
 ) {
     val (bg, ink) = itemColors(item)
     val doneAlpha by animateFloatAsState(if (item.done) 0.5f else 1f, YoinMotion.defaultEffectsSpec(), label = "done")
+    // While carried, the original stays as a faint footprint.
+    val liftAlpha by animateFloatAsState(if (lifted) 0.3f else 1f, YoinMotion.fastEffectsSpec(), label = "lifted")
     val pending = item.key.startsWith("new:")
+    var coords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    val currentMover by rememberUpdatedState(mover)
     Row(
         modifier
-            .graphicsLayer { alpha = doneAlpha * (if (pending) 0.7f else 1f) }
+            .onGloballyPositioned { coords = it }
+            .pointerInput(item.key) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { pos ->
+                        val c = coords ?: return@detectDragGesturesAfterLongPress
+                        currentMover?.start(item, c.localToRoot(pos), pos.y)
+                    },
+                    onDrag = { change, _ ->
+                        change.consume()
+                        coords?.let { currentMover?.move(it.localToRoot(change.position)) }
+                    },
+                    onDragEnd = { currentMover?.drop() },
+                    onDragCancel = { currentMover?.cancel() },
+                )
+            }
+            .graphicsLayer { alpha = doneAlpha * liftAlpha * (if (pending) 0.7f else 1f) }
             .clip(RoundedCornerShape(10.dp))
             .background(bg)
             .clickable(onClick = onClick)

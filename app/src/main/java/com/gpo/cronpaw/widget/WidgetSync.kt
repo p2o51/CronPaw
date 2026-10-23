@@ -1,11 +1,15 @@
 package com.gpo.cronpaw.widget
 
+import android.app.AlarmManager
+import android.app.PendingIntent
 import android.app.job.JobInfo
 import android.app.job.JobParameters
 import android.app.job.JobScheduler
 import android.app.job.JobService
+import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.provider.CalendarContract
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.updateAll
@@ -23,6 +27,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.concurrent.TimeUnit
 
 /**
@@ -44,7 +50,10 @@ object WidgetSync {
 
     suspend fun update(context: Context) {
         val ids = runCatching { GlanceAppWidgetManager(context).getGlanceIds(AgendaGlance::class.java) }.getOrDefault(emptyList())
-        if (ids.isNotEmpty()) runCatching { AgendaGlance().updateAll(context) }
+        if (ids.isNotEmpty()) {
+            runCatching { AgendaGlance().updateAll(context) }
+            WidgetTick.arm(context)
+        }
     }
 
     fun schedule(context: Context) {
@@ -102,6 +111,43 @@ class CalendarChangeJob : JobService() {
                 .setTriggerContentMaxDelay(10_000)
                 .build()
             runCatching { js.schedule(job) }
+        }
+    }
+}
+
+/**
+ * An alarm at the next moment the widget changes: an item starting or ending, or midnight.
+ * Re-armed on every widget update, so it always points at the next one.
+ */
+class WidgetTick : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val pending = goAsync()
+        CoroutineScope(Dispatchers.Main).launch {
+            runCatching {
+                Agenda.init(context)
+                WidgetSync.update(context)
+            }
+            pending.finish()
+        }
+    }
+
+    companion object {
+        fun arm(context: Context) {
+            val now = System.currentTimeMillis()
+            val midnight = LocalDate.now().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            val next = Agenda.items.value.asSequence()
+                .filter { !it.allDay }
+                .flatMap { sequenceOf(it.start, it.end) }
+                .filter { it > now + 1_000 }
+                .minOrNull()
+                ?.coerceAtMost(midnight) ?: midnight
+            val am = context.getSystemService(AlarmManager::class.java) ?: return
+            val intent = PendingIntent.getBroadcast(
+                context, 0, Intent(context, WidgetTick::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            // A one-minute window needs no exact-alarm permission and is close enough for a list.
+            runCatching { am.setWindow(AlarmManager.RTC, next, 60_000, intent) }
         }
     }
 }

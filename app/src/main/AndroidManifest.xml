@@ -68,6 +68,11 @@
                 android:resource="@xml/widget_agenda_info" />
         </receiver>
 
+        <!-- Re-renders the widget when an item starts or ends (widget/WidgetTick). -->
+        <receiver
+            android:name=".widget.WidgetTick"
+            android:exported="false" />
+
         <!-- Re-renders the widget when the calendar provider changes (widget/CalendarChangeJob). -->
         <service
             android:name=".widget.CalendarChangeJob"

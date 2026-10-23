@@ -46,6 +46,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.PermanentNavigationDrawer
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
@@ -65,6 +66,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -113,6 +117,14 @@ fun HomeScreen(nav: Nav) {
     val density = LocalDensity.current
     val cs = MaterialTheme.colorScheme
 
+    // A tablet or unfolded screen: the drawer stays, and 周 is the first view until one is picked.
+    val wide = LocalConfiguration.current.screenWidthDp >= 840
+    remember(wide) {
+        if (wide && !AppSettings.viewChosen.value && AppSettings.viewDays.value == 3) {
+            AppSettings.set(AppSettings.viewDays, 7)
+            AppSettings.set(AppSettings.timelineDays, 7)
+        }
+    }
     val viewDays by AppSettings.viewDays.state.collectAsState()
     val tl = rememberTimelineState(if (viewDays > 0) viewDays else AppSettings.timelineDays.value)
     val monthPager = rememberPagerState(initialPage = MonthMid) { MonthMid * 2 }
@@ -235,6 +247,60 @@ fun HomeScreen(nav: Nav) {
             }
         }
     }
+    // Long-press an item to move it: the same carry, the item's top following the finger.
+    var moving by remember { mutableStateOf<AgendaItem?>(null) }
+    // 未排期: the database whose dateless pages are out in the tray, and the ones placed since.
+    var trayDb by remember { mutableStateOf<String?>(null) }
+    var scheduled by remember { mutableStateOf(emptySet<String>()) }
+    BackHandler(trayDb != null && carried == null) { trayDb = null }
+    val mover = remember {
+        object : MoveDrag {
+            var grabY = 0f
+            override fun start(item: AgendaItem, root: Offset, grabY: Float) {
+                if (item.allDay) return
+                this.grabY = grabY
+                haptics.liftOff()
+                moving = item
+                val at = root.copy(y = root.y - grabY)
+                // A dateless page has no length yet: the default one.
+                val minutes = if (item.end > item.start) item.durationMinutes.coerceAtLeast(15) else AppSettings.defaultMinutes.value
+                carried = minutes to at
+                updateGhost(carried!!.first, at)
+            }
+            override fun move(root: Offset) {
+                val c = carried ?: return
+                if (moving == null) return
+                val at = root.copy(y = root.y - grabY)
+                carried = c.first to at
+                updateGhost(c.first, at)
+            }
+            override fun drop() {
+                val item = moving ?: return
+                val g = tl.ghost
+                carried = null
+                moving = null
+                tl.ghost = null
+                if (g != null && g.start != item.start) {
+                    haptics.chargeFull()
+                    val unscheduled = item.end <= item.start
+                    if (unscheduled) scheduled = scheduled + item.key
+                    scope.launch {
+                        val ok = Actions.move(context, item, g.start, g.start + g.minutes * 60_000L)
+                        if (!ok) {
+                            if (unscheduled) { scheduled = scheduled - item.key; Agenda.forget(item.key) }
+                            toast("没挪成")
+                        } else if (unscheduled) Agenda.afterWrite()
+                    }
+                }
+            }
+            override fun cancel() {
+                carried = null
+                moving = null
+                tl.ghost = null
+            }
+        }
+    }
+
     // Near the top or bottom edge while carrying: scroll the day.
     LaunchedEffect(carried != null) {
         while (isActive && carried != null) {
@@ -257,22 +323,32 @@ fun HomeScreen(nav: Nav) {
     val drawer = rememberDrawerState(DrawerValue.Closed)
     BackHandler(drawer.isOpen) { scope.launch { drawer.close() } }
 
-    ModalNavigationDrawer(
-        drawerState = drawer,
-        gesturesEnabled = drawer.isOpen,
-        drawerContent = {
+    val drawerContent: @Composable () -> Unit = {
             CalendarDrawer(
+                permanent = wide,
                 viewDays = viewDays,
                 onViewDays = {
+                    AppSettings.set(AppSettings.viewChosen, true)
                     AppSettings.set(AppSettings.viewDays, it)
                     if (it > 0) AppSettings.set(AppSettings.timelineDays, it)
                 },
                 onAddDatabase = { scope.launch { drawer.close() }; nav.push("db:") },
                 onSettings = { scope.launch { drawer.close() }; nav.push("settings") },
+                onUnscheduled = { id ->
+                    scope.launch { drawer.close() }
+                    trayOpen = false
+                    // Placing needs the timeline.
+                    if (viewDays <= 0) AppSettings.set(AppSettings.viewDays, AppSettings.timelineDays.value)
+                    scheduled = emptySet()
+                    trayDb = id
+                },
             )
-        },
-    ) {
-        Box(Modifier.fillMaxSize().background(cs.surface)) {
+    }
+    // Where the body sits in the window: the carried bar is placed in window terms, and a
+    // permanent drawer pushes the body right.
+    var bodyOrigin by remember { mutableStateOf(Offset.Zero) }
+    val body: @Composable () -> Unit = {
+        Box(Modifier.fillMaxSize().background(cs.surface).onGloballyPositioned { bodyOrigin = it.positionInRoot() }) {
             Column(Modifier.fillMaxSize().statusBarsPadding()) {
                 // What the header names: the days, the month, or the day at the top of 日程.
                 val (first, last) = when {
@@ -292,7 +368,7 @@ fun HomeScreen(nav: Nav) {
                     first = first,
                     last = last,
                     showRange = shown > 1,
-                    onMenu = { scope.launch { drawer.open() } },
+                    onMenu = if (wide) null else ({ scope.launch { drawer.open() } }),
                     onToday = {
                         haptics.tick()
                         scope.launch {
@@ -349,6 +425,8 @@ fun HomeScreen(nav: Nav) {
                         onItem = onItem,
                         onToggleDone = onToggleDone,
                         // Tap on empty time: a new item from there, the default length, marked on the timeline.
+                        mover = mover,
+                        movingKey = moving?.key,
                         onSlot = { start ->
                             if (carried != null || draft != null) return@Timeline
                             if (trayOpen) { trayOpen = false; customEditing = false; return@Timeline }
@@ -391,6 +469,24 @@ fun HomeScreen(nav: Nav) {
                 )
             }
 
+            val unscheduledAlpha by animateFloatAsState(if (moving != null) 0.25f else 1f, YoinMotion.fastEffectsSpec(), label = "unscheduled")
+            AnimatedVisibility(
+                visible = trayDb != null,
+                modifier = Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(start = 16.dp, end = 96.dp, bottom = 16.dp),
+                enter = fadeIn(YoinMotion.defaultEffectsSpec()) + scaleIn(YoinMotion.defaultSpatialSpec(), initialScale = 0.85f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 1f)),
+                exit = fadeOut(YoinMotion.fastEffectsSpec()) + scaleOut(YoinMotion.fastSpatialSpec(), targetScale = 0.85f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 1f)),
+            ) {
+                // Kept while it animates out.
+                val id = remember { mutableStateOf("") }.apply { trayDb?.let { value = it } }.value
+                UnscheduledTray(
+                    databaseId = id,
+                    removed = scheduled,
+                    mover = mover,
+                    onClose = { trayDb = null },
+                    modifier = Modifier.widthIn(max = 380.dp).graphicsLayer { alpha = unscheduledAlpha },
+                )
+            }
+
             // The + : tap for the tray, hold to type.
             val fabRotation by animateFloatAsState(if (trayOpen) 45f else 0f, YoinMotion.defaultSpatialSpec(), label = "fab")
             Box(
@@ -428,7 +524,7 @@ fun HomeScreen(nav: Nav) {
                 val (value, unit) = Times.duration(c.first)
                 Box(
                     Modifier
-                        .offset { IntOffset((c.second.x - 60.dp.toPx()).roundToInt(), (c.second.y - 28.dp.toPx()).roundToInt()) }
+                        .offset { IntOffset((c.second.x - bodyOrigin.x - 60.dp.toPx()).roundToInt(), (c.second.y - bodyOrigin.y - 28.dp.toPx()).roundToInt()) }
                         .size(120.dp, 44.dp)
                         .graphicsLayer {
                             val v = lift.value
@@ -442,11 +538,22 @@ fun HomeScreen(nav: Nav) {
                         .background(cs.primary),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("$value$unit", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.onPrimary)
+                    Text(
+                        moving?.title ?: "$value$unit",
+                        Modifier.padding(horizontal = 8.dp),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = cs.onPrimary,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
     }
+    // Wide screens keep the drawer open beside the days.
+    if (wide) PermanentNavigationDrawer(drawerContent) { body() }
+    else ModalNavigationDrawer(drawerContent, drawerState = drawer, gesturesEnabled = drawer.isOpen) { body() }
 
     selected?.let { ItemSheet(it, onDismiss = { selected = null }) }
     if (showUpcoming) {
@@ -477,11 +584,12 @@ fun HomeScreen(nav: Nav) {
 }
 
 @Composable
-private fun Header(first: LocalDate, last: LocalDate, showRange: Boolean, onMenu: () -> Unit, onToday: () -> Unit, onSearch: () -> Unit) {
+private fun Header(first: LocalDate, last: LocalDate, showRange: Boolean, onMenu: (() -> Unit)?, onToday: () -> Unit, onSearch: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val today = LocalDate.now()
     Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onMenu) { Icon(CronSymbols.Menu, "日历和数据库") }
+        if (onMenu != null) IconButton(onClick = onMenu) { Icon(CronSymbols.Menu, "日历和数据库") }
+        else Spacer(Modifier.width(12.dp))
         Text(
             if (first.year != today.year) "${first.year % 100}年${first.monthValue}月" else "${first.monthValue}月",
             style = MaterialTheme.typography.headlineMedium,
