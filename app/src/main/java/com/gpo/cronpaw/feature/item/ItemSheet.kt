@@ -162,7 +162,61 @@ fun ItemSheet(item: AgendaItem, onDismiss: () -> Unit) {
                     Text(account, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
                 }
             }
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(14.dp))
+
+            // Actions as a row of round colour buttons with labels under them, so the sheet
+            // steps from the big block to round buttons to the plain property blocks below.
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                val pinned = live.key in pins
+                RoundAction(
+                    if (pinned) CronSymbols.PinFilled else CronSymbols.Pin,
+                    if (pinned) "已置顶" else "置顶",
+                    if (pinned) cs.primary else cs.primaryContainer,
+                    if (pinned) cs.onPrimary else cs.onPrimaryContainer,
+                ) { haptics.tick(); Pins.toggle(live.key) }
+                if (notion != null && notion.url.isNotEmpty()) {
+                    RoundAction(CronSymbols.Database, "Notion", cs.secondaryContainer, cs.onSecondaryContainer) {
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(notion.url))) }
+                    }
+                }
+                val cal = live.source as? Source.Calendar
+                if (cal != null && cal.eventId > 0) {
+                    RoundAction(CronSymbols.Calendar, "日历", cs.secondaryContainer, cs.onSecondaryContainer) {
+                        runCatching {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, cal.eventId))
+                                    .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, live.start)
+                                    .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, live.end),
+                            )
+                        }
+                    }
+                }
+                if (db != null) {
+                    RoundAction(
+                        YoinSymbols.Visibility, "属性",
+                        if (showAll) cs.tertiary else cs.tertiaryContainer,
+                        if (showAll) cs.onTertiary else cs.onTertiaryContainer,
+                    ) { haptics.tick(); showAll = !showAll }
+                }
+                RoundAction(
+                    YoinSymbols.Delete,
+                    if (confirmDelete) "再点删除" else "删除",
+                    if (confirmDelete) cs.error else cs.surfaceContainerHighest,
+                    if (confirmDelete) cs.onError else cs.onSurfaceVariant,
+                ) {
+                    if (!confirmDelete) { haptics.tick(); confirmDelete = true; return@RoundAction }
+                    haptics.lowTick()
+                    scope.launch {
+                        if (Actions.delete(context, live)) {
+                            // Slide away first, so it doesn't just blink out.
+                            runCatching { sheet.hide() }
+                            toast("已删除")
+                            onDismiss()
+                        } else toast("删不掉")
+                    }
+                }
+            }
+            Spacer(Modifier.height(14.dp))
 
             // 状态 + the properties the user chose to show
             if (db != null) {
@@ -235,53 +289,7 @@ fun ItemSheet(item: AgendaItem, onDismiss: () -> Unit) {
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val pinned = live.key in pins
-                FilledTonalButton(onClick = { haptics.tick(); Pins.toggle(live.key) }) {
-                    Icon(if (pinned) CronSymbols.PinFilled else CronSymbols.Pin, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (pinned) "已置顶" else "置顶")
-                }
-                Spacer(Modifier.width(8.dp))
-                if (notion != null && notion.url.isNotEmpty()) {
-                    TextButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(notion.url))) } }) {
-                        Text("在 Notion 打开")
-                    }
-                }
-                val cal = live.source as? Source.Calendar
-                if (cal != null && cal.eventId > 0) {
-                    TextButton(onClick = {
-                        runCatching {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, cal.eventId))
-                                    .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, live.start)
-                                    .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, live.end),
-                            )
-                        }
-                    }) { Text("日历中打开") }
-                }
-                Spacer(Modifier.weight(1f))
-                if (db != null) {
-                    IconButton(onClick = { haptics.tick(); showAll = !showAll }) {
-                        Icon(YoinSymbols.MoreHorizontal, "属性", tint = if (showAll) cs.primary else cs.onSurfaceVariant)
-                    }
-                }
-                IconButton(onClick = {
-                    if (!confirmDelete) { haptics.tick(); confirmDelete = true; return@IconButton }
-                    haptics.lowTick()
-                    scope.launch {
-                        if (Actions.delete(context, live)) {
-                            // Slide away first, so it doesn't just blink out.
-                            runCatching { sheet.hide() }
-                            toast("已删除")
-                            onDismiss()
-                        } else toast("删不掉")
-                    }
-                }) {
-                    Icon(YoinSymbols.Delete, if (confirmDelete) "再点一次删除" else "删除", tint = if (confirmDelete) cs.error else cs.onSurfaceVariant)
-                }
-            }
+
         }
     }
 }
@@ -302,4 +310,17 @@ private fun Block(content: @Composable () -> Unit) {
 private fun Label(text: String) {
     Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Spacer(Modifier.height(4.dp))
+}
+
+@Composable
+private fun RoundAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, bg: Color, ink: Color, onClick: () -> Unit) {
+    val fill by androidx.compose.animation.animateColorAsState(bg, com.gpo.cronpaw.ui.theme.YoinMotion.defaultEffectsSpec(), label = "action")
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(64.dp)) {
+        Box(
+            Modifier.size(52.dp).clip(CircleShape).background(fill).clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) { Icon(icon, null, Modifier.size(24.dp), tint = ink) }
+        Spacer(Modifier.height(6.dp))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+    }
 }
