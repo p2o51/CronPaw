@@ -88,7 +88,7 @@ class TimelineState(
         base = from.minusDays(((pager.currentPage - PageMid) * days).toLong())
     }
 
-    fun setDays(n: Int) {
+    fun switchDays(n: Int) {
         val keep = first
         days = n
         base = (if (n == 7) Times.monday(keep) else keep).minusDays(((pager.currentPage - PageMid) * n).toLong())

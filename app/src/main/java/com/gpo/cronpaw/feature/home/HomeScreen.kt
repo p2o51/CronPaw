@@ -109,7 +109,7 @@ fun HomeScreen(nav: Nav) {
 
     val viewDays by AppSettings.viewDays.state.collectAsState()
     val tl = rememberTimelineState(viewDays)
-    LaunchedEffect(viewDays) { if (tl.days != viewDays) tl.setDays(viewDays) }
+    LaunchedEffect(viewDays) { if (tl.days != viewDays) tl.switchDays(viewDays) }
     val items by Agenda.items.collectAsState()
 
     // ── Calendar permission ──

@@ -170,7 +170,7 @@ fun SearchScreen(nav: Nav) {
                     unfocusedContainerColor = cs.surfaceContainerHigh,
                 ),
             )
-            if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(YoinSymbols.Clear, "清空") }
+            if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(YoinSymbols.Close, "清空") }
         }
         LazyColumn(contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
             items(ranges, key = { "r:${it.from}:${it.note}" }) { r ->

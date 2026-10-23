@@ -54,13 +54,14 @@ import androidx.compose.ui.unit.dp
 import com.gpo.cronpaw.core.agenda.AgendaItem
 import com.gpo.cronpaw.core.agenda.Pins
 import com.gpo.cronpaw.ui.theme.CronSymbols
+import com.gpo.cronpaw.ui.theme.LocalYoinMotionRole
 import com.gpo.cronpaw.ui.theme.YoinMotion
 import com.gpo.cronpaw.ui.theme.rememberRichHaptics
 import com.gpo.cronpaw.ui.time.Times
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.time.LocalDate
 import kotlin.math.abs
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Cards swiped away stay away until the app process ends (「这次打开」). */
 object TopCardSession {
@@ -118,6 +119,8 @@ fun TopCard(
     val scope = rememberCoroutineScope()
     val drag = remember { Animatable(0f) }
     val cs = MaterialTheme.colorScheme
+    val motionRole = LocalYoinMotionRole.current
+    val motionScheme = MaterialTheme.motionScheme
 
     Box(
         modifier
@@ -157,9 +160,9 @@ fun TopCard(
             targetState = current,
             contentKey = { it.key },
             transitionSpec = {
-                (slideInVertically(YoinMotion.defaultSpatialSpec()) { it / 2 } + fadeIn(YoinMotion.defaultEffectsSpec()) +
-                    scaleIn(YoinMotion.defaultSpatialSpec(), initialScale = 0.92f)) togetherWith
-                    (slideOutVertically(YoinMotion.defaultSpatialSpec()) { -it / 2 } + fadeOut(YoinMotion.fastEffectsSpec()))
+                (slideInVertically(YoinMotion.defaultSpatialSpec(motionRole, motionScheme)) { it / 2 } + fadeIn(YoinMotion.defaultEffectsSpec(motionRole, motionScheme)) +
+                    scaleIn(YoinMotion.defaultSpatialSpec(motionRole, motionScheme), initialScale = 0.92f)) togetherWith
+                    (slideOutVertically(YoinMotion.defaultSpatialSpec(motionRole, motionScheme)) { -it / 2 } + fadeOut(YoinMotion.fastEffectsSpec(motionRole, motionScheme)))
             },
             label = "topcard",
         ) { item ->

@@ -8,17 +8,19 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.toMutableStateList
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.toMutableStateList
+import androidx.compose.ui.Modifier
 import com.gpo.cronpaw.feature.home.HomeScreen
 import com.gpo.cronpaw.feature.search.SearchScreen
 import com.gpo.cronpaw.feature.settings.DatabaseSetupScreen
 import com.gpo.cronpaw.feature.settings.SettingsScreen
+import com.gpo.cronpaw.ui.theme.LocalYoinMotionRole
 import com.gpo.cronpaw.ui.theme.YoinMotion
 
 /** Four pages, so a plain stack of strings: "home", "search", "settings", "db:<id>" ("db:" = pick a new one). */
@@ -36,14 +38,16 @@ fun CronNavHost() {
     }
     val nav = remember(stack) { Nav(stack) }
     BackHandler(enabled = stack.size > 1) { nav.pop() }
+    val motionRole = LocalYoinMotionRole.current
+    val motionScheme = MaterialTheme.motionScheme
     // Home stays composed underneath, so the timeline keeps its place and scroll.
     Box(Modifier.fillMaxSize()) {
         HomeScreen(nav)
         AnimatedContent(
             targetState = stack.last(),
             transitionSpec = {
-                (fadeIn(YoinMotion.defaultEffectsSpec()) + scaleIn(YoinMotion.defaultSpatialSpec(), initialScale = 0.96f)) togetherWith
-                    fadeOut(YoinMotion.fastEffectsSpec())
+                (fadeIn(YoinMotion.defaultEffectsSpec(motionRole, motionScheme)) + scaleIn(YoinMotion.defaultSpatialSpec(motionRole, motionScheme), initialScale = 0.96f)) togetherWith
+                    fadeOut(YoinMotion.fastEffectsSpec(motionRole, motionScheme))
             },
             label = "nav",
         ) { route ->
