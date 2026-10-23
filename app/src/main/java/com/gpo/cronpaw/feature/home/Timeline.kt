@@ -3,6 +3,14 @@ package com.gpo.cronpaw.feature.home
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import kotlinx.coroutines.launch
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -96,11 +104,46 @@ fun Timeline(
     val byDay = remember(items) { items.groupByDays() }
 
     Column(modifier) {
-        Row(Modifier.fillMaxWidth()) {
+        // Each header page reports its natural height; the header follows the finger from
+        // one page's height to the next, and springs when the data (not a swipe) changes it.
+        val pageHeights = remember(state.days, state.base) { mutableStateMapOf<Int, Int>() }
+        val headerHeight = remember { Animatable(0f) }
+        LaunchedEffect(pageHeights) {
+            snapshotFlow {
+                val cur = state.pager.currentPage
+                val f = state.pager.currentPageOffsetFraction
+                val next = if (f >= 0f) cur + 1 else cur - 1
+                val a = pageHeights[cur]
+                val b = pageHeights[next] ?: a
+                val target = if (a == null || b == null) null else a + (b - a) * kotlin.math.abs(f)
+                target to state.pager.isScrollInProgress
+            }.collect { (target, swiping) ->
+                if (target == null) return@collect
+                if (swiping || headerHeight.value == 0f) headerHeight.snapTo(target)
+                else launch { headerHeight.animateTo(target, spring(stiffness = Spring.StiffnessMediumLow)) }
+            }
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .then(if (headerHeight.value > 0f) Modifier.height(with(density) { headerHeight.value.toDp() }) else Modifier)
+                .clipToBounds(),
+        ) {
             Spacer(Modifier.width(Gutter))
-            HorizontalPager(state.header, Modifier.weight(1f), userScrollEnabled = false, verticalAlignment = Alignment.Top) { page ->
+            HorizontalPager(
+                state.header,
+                Modifier.weight(1f).fillMaxHeight(),
+                userScrollEnabled = false,
+                beyondViewportPageCount = 1,
+                verticalAlignment = Alignment.Top,
+            ) { page ->
                 val first = state.firstDay(page)
-                Row(Modifier.fillMaxWidth()) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight(align = Alignment.Top, unbounded = true)
+                        .onSizeChanged { pageHeights[page] = it.height },
+                ) {
                     for (i in 0 until state.days) {
                         val day = first.plusDays(i.toLong())
                         DayHeader(day, byDay[day].orEmpty().filter { it.allDay }, onItem, Modifier.weight(1f))
