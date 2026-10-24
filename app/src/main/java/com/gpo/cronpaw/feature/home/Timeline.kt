@@ -421,19 +421,26 @@ private fun DayColumn(
 @Composable
 private fun GhostBlock(ghost: Ghost, modifier: Modifier) {
     val cs = MaterialTheme.colorScheme
+    val item = ghost.item
+    val bg = item?.let { Color(it.color).copy(alpha = 0.9f) } ?: cs.primary.copy(alpha = 0.85f)
+    val ink = item?.let { if (Color(it.color).luminance() > 0.5f) Color(0xFF1B1B1F) else Color.White } ?: cs.onPrimary
     val pop = remember { Animatable(0.6f) }
     LaunchedEffect(Unit) { pop.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium)) }
     Box(
         modifier
             .graphicsLayer { scaleX = pop.value; scaleY = pop.value; alpha = pop.value.coerceAtMost(1f) }
-            .padding(1.5.dp).clip(RoundedCornerShape(10.dp)).background(cs.primary.copy(alpha = 0.85f)).padding(6.dp),
+            .padding(1.5.dp).clip(RoundedCornerShape(10.dp)).background(bg).padding(6.dp),
     ) {
-        Text(
-            "${Times.hm(ghost.start)}  ${Times.durationText(ghost.minutes)}",
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = cs.onPrimary,
-        )
+        Column {
+            // Moving: the item's own name and colour, so it can't be mistaken for a new item.
+            if (item != null) Text(item.title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = ink, maxLines = 1)
+            Text(
+                "${Times.hm(ghost.start)}  ${Times.durationText(ghost.minutes)}",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (item != null) FontWeight.Normal else FontWeight.Bold,
+                color = ink,
+            )
+        }
     }
 }
 

@@ -1,5 +1,6 @@
 package com.gpo.cronpaw.feature.home
 
+import com.gpo.cronpaw.core.agenda.AgendaItem
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -25,7 +26,8 @@ const val PageMid = 5000
 private const val PageCount = PageMid * 2
 
 /** A slot being dragged onto the timeline: the snapped start and the length. */
-data class Ghost(val start: Long, val minutes: Int)
+/** Where a drop would land. [item] is set when an existing item is being moved: the ghost wears its colour. */
+data class Ghost(val start: Long, val minutes: Int, val item: AgendaItem? = null)
 
 /**
  * The timeline's position: which days are on screen (pages of [days] days from [base])

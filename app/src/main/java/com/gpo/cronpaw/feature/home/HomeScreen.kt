@@ -1,5 +1,7 @@
 package com.gpo.cronpaw.feature.home
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.NonCancellable
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -220,11 +222,11 @@ fun HomeScreen(nav: Nav) {
         return (now / q + 1) * q
     }
 
-    fun updateGhost(minutes: Int, root: Offset) {
+    fun updateGhost(minutes: Int, root: Offset, item: AgendaItem? = null) {
         val slot = tl.slotAt(root, minutes)
         if (slot != tl.ghost?.start) {
             if (slot != null) haptics.tick()
-            tl.ghost = slot?.let { Ghost(it, minutes) }
+            tl.ghost = slot?.let { Ghost(it, minutes, item) }
         }
     }
 
@@ -278,14 +280,14 @@ fun HomeScreen(nav: Nav) {
                 // A dateless page has no length yet: the default one.
                 val minutes = if (item.end > item.start) item.durationMinutes.coerceAtLeast(15) else AppSettings.defaultMinutes.value
                 carried = minutes to at
-                updateGhost(carried!!.first, at)
+                updateGhost(carried!!.first, at, item)
             }
             override fun move(root: Offset) {
                 val c = carried ?: return
                 if (moving == null) return
                 val at = root.copy(y = root.y - grabY)
                 carried = c.first to at
-                updateGhost(c.first, at)
+                updateGhost(c.first, at, moving)
             }
             override fun drop() {
                 val item = moving ?: return
@@ -327,7 +329,7 @@ fun HomeScreen(nav: Nav) {
             }
             if (dy != 0f) {
                 tl.scroll.scrollBy(dy)
-                updateGhost(c.first, c.second)
+                updateGhost(c.first, c.second, moving)
             }
             delay(16)
         }
@@ -552,7 +554,8 @@ fun HomeScreen(nav: Nav) {
                             shape = RoundedCornerShape(14.dp)
                             clip = true
                         }
-                        .background(cs.primary),
+                        // A moved item keeps its own colour, so it never reads as a new one.
+                        .background(moving?.let { Color(it.color) } ?: cs.primary),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -560,7 +563,7 @@ fun HomeScreen(nav: Nav) {
                         Modifier.padding(horizontal = 8.dp),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
-                        color = cs.onPrimary,
+                        color = moving?.let { if (Color(it.color).luminance() > 0.5f) Color(0xFF1B1B1F) else Color.White } ?: cs.onPrimary,
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
