@@ -68,6 +68,32 @@
                 android:resource="@xml/widget_agenda_info" />
         </receiver>
 
+        <!-- 下一个 home-screen widget (widget/NextWidget). -->
+        <receiver
+            android:name=".widget.NextWidget"
+            android:exported="true"
+            android:label="@string/widget_next_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_next_info" />
+        </receiver>
+
+        <!-- 本月 home-screen widget (widget/MonthWidget). -->
+        <receiver
+            android:name=".widget.MonthWidget"
+            android:exported="true"
+            android:label="@string/widget_month_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_month_info" />
+        </receiver>
+
         <!-- Re-renders the widget when an item starts or ends (widget/WidgetTick). -->
         <receiver
             android:name=".widget.WidgetTick"

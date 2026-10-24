@@ -2,5 +2,9 @@
 <resources>
     <string name="app_name" translatable="false">CronPaw</string>
     <string name="widget_agenda_label">今天</string>
-    <string name="widget_agenda_description">今天的日程和下一个</string>
+    <string name="widget_agenda_description">今天还剩的日程和待办</string>
+    <string name="widget_next_label">下一个</string>
+    <string name="widget_next_description">接下来的一项和还有多久</string>
+    <string name="widget_month_label">本月</string>
+    <string name="widget_month_description">这个月每天有什么，点一天打开那天</string>
 </resources>

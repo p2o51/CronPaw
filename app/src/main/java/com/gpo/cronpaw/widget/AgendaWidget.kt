@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -12,10 +12,7 @@ import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.LocalSize
 import androidx.glance.action.ActionParameters
-import androidx.glance.action.actionParametersOf
-import androidx.glance.action.actionStartActivity
 import androidx.glance.appwidget.action.ActionCallback
-import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
@@ -37,8 +34,6 @@ import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
-import androidx.glance.unit.ColorProvider
-import com.gpo.cronpaw.MainActivity
 import com.gpo.cronpaw.core.agenda.Actions
 import com.gpo.cronpaw.core.agenda.Agenda
 import com.gpo.cronpaw.core.agenda.AgendaItem
@@ -55,7 +50,7 @@ class AgendaWidget : GlanceAppWidgetReceiver() {
 
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
-        WidgetSync.cancel(context)
+        WidgetSync.disabled(context)
     }
 }
 
@@ -71,91 +66,89 @@ class AgendaGlance : GlanceAppWidget() {
         provideContent {
             GlanceTheme {
                 val items by Agenda.items.collectAsState()
-                val unscheduled by Agenda.unscheduled.collectAsState()
-                Content(items, unscheduled.values.sum())
+                Content(context, items)
             }
         }
     }
 
     @Composable
-    private fun Content(items: List<AgendaItem>, unscheduled: Int) {
+    private fun Content(context: Context, items: List<AgendaItem>) {
         val now = System.currentTimeMillis()
         val today = LocalDate.now()
         val todayLeft = items.filter { !it.done && it.end > now && Times.date(it.start) <= today && Times.date(it.end - 1) >= today }
         val tomorrow = items.filter { !it.done && Times.date(it.start) == today.plusDays(1) }
         val size = LocalSize.current
-        val rows = ((size.height.value - 56f) / 40f).toInt().coerceAtLeast(1)
+        val narrow = size.width < 200.dp
+        // A narrow widget gives a title two lines rather than cutting it after a few characters.
+        val rowHeight = if (narrow) 62f else 46f
+        val list = todayLeft.ifEmpty { tomorrow }
+        val label = if (todayLeft.isEmpty() && list.isNotEmpty()) 22f else 0f
+        val rows = ((size.height.value - 30f - 40f - 12f - label) / rowHeight).toInt().coerceAtLeast(1)
         Column(
             GlanceModifier
                 .fillMaxSize()
                 .appWidgetBackground()
                 .background(GlanceTheme.colors.widgetBackground)
                 .cornerRadius(24.dp)
-                .padding(14.dp)
-                .clickable(actionStartActivity<MainActivity>()),
+                .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 16.dp)
+                .clickable(openAt(context, today)),
         ) {
-            Row(verticalAlignment = Alignment.Bottom) {
+            // The day, and how many are left: one line, the date carrying it.
+            Row(GlanceModifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     today.dayOfMonth.toString(),
-                    style = TextStyle(fontSize = 26.sp, fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface),
+                    style = TextStyle(fontSize = 28.sp, fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface),
                 )
-                Spacer(GlanceModifier.width(6.dp))
+                Spacer(GlanceModifier.width(8.dp))
                 Text(
                     Times.weekday(today),
-                    modifier = GlanceModifier.padding(bottom = 4.dp),
-                    style = TextStyle(fontSize = 13.sp, color = GlanceTheme.colors.onSurfaceVariant),
+                    maxLines = 1,
+                    style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium, color = GlanceTheme.colors.onSurfaceVariant),
                 )
                 Spacer(GlanceModifier.defaultWeight())
-                // 未排期 across the databases, quieter than today's count.
-                if (unscheduled > 0) Text(
-                    "未排期 $unscheduled",
-                    modifier = GlanceModifier.padding(bottom = 5.dp, end = 8.dp),
-                    style = TextStyle(fontSize = 11.sp, color = GlanceTheme.colors.onSurfaceVariant),
-                )
-                if (todayLeft.isNotEmpty()) Text(
-                    todayLeft.size.toString(),
-                    modifier = GlanceModifier.padding(bottom = 4.dp),
-                    style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold, color = GlanceTheme.colors.primary),
+                if (todayLeft.isNotEmpty() && !narrow) Text(
+                    "还有 ${todayLeft.size} 项",
+                    maxLines = 1,
+                    style = TextStyle(fontSize = 12.sp, color = GlanceTheme.colors.onSurfaceVariant),
                 )
             }
-            Spacer(GlanceModifier.height(8.dp))
-            val list = todayLeft.ifEmpty { tomorrow }
+            Spacer(GlanceModifier.height(12.dp))
             if (list.isEmpty()) {
                 Text("今天没有了", style = TextStyle(fontSize = 14.sp, color = GlanceTheme.colors.onSurfaceVariant))
             } else {
-                if (todayLeft.isEmpty()) Text("明天", style = TextStyle(fontSize = 12.sp, color = GlanceTheme.colors.onSurfaceVariant))
-                list.take(rows).forEach { item -> ItemRow(item) }
+                if (todayLeft.isEmpty()) {
+                    Text("明天", style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium, color = GlanceTheme.colors.onSurfaceVariant))
+                    Spacer(GlanceModifier.height(8.dp))
+                }
+                // Spacing as padding, not spacers: a Glance column takes ten children at most.
+                Column(GlanceModifier.fillMaxWidth()) {
+                    list.take(rows.coerceAtMost(9)).forEachIndexed { i, item ->
+                        ItemRow(context, item, if (narrow) 2 else 1, if (i > 0) 12.dp else 0.dp)
+                    }
+                }
             }
         }
     }
 
     @Composable
-    private fun ItemRow(item: AgendaItem) {
-        Row(GlanceModifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (item.todo) {
-                // A todo's circle: tap to tick it off without opening the app.
-                Box(
-                    GlanceModifier.width(18.dp).height(18.dp).cornerRadius(9.dp).background(ColorProvider(Color(item.color)))
-                        .clickable(actionRunCallback<ToggleDone>(actionParametersOf(ToggleDone.Key to item.key))),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Box(GlanceModifier.width(14.dp).height(14.dp).cornerRadius(7.dp).background(GlanceTheme.colors.widgetBackground)) {}
-                }
-            } else {
-                Box(GlanceModifier.width(4.dp).height(30.dp).cornerRadius(2.dp).background(ColorProvider(Color(item.color)))) {}
+    private fun ItemRow(context: Context, item: AgendaItem, titleLines: Int, top: Dp) {
+        Row(
+            GlanceModifier.fillMaxWidth().padding(top = top).clickable(openAt(context, Times.date(item.start), item)),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // The mark sits in an 18dp column so circles and bars line their titles up.
+            Box(GlanceModifier.width(18.dp), contentAlignment = Alignment.Center) {
+                if (item.todo) TodoCircle(item) else ColorBar(item, 32.dp)
             }
-            Spacer(GlanceModifier.width(8.dp))
+            Spacer(GlanceModifier.width(10.dp))
             Column(GlanceModifier.defaultWeight()) {
                 Text(
                     item.title,
-                    maxLines = 1,
+                    maxLines = titleLines,
                     style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium, color = GlanceTheme.colors.onSurface),
                 )
-                Text(
-                    if (item.allDay) "全天" else "${Times.hm(item.start)}  ${Times.hm(item.end)}",
-                    maxLines = 1,
-                    style = TextStyle(fontSize = 11.sp, color = GlanceTheme.colors.onSurfaceVariant),
-                )
+                Spacer(GlanceModifier.height(2.dp))
+                TimeLine(item)
             }
         }
     }

@@ -11,6 +11,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.provider.CalendarContract
+import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.updateAll
 import androidx.work.CoroutineWorker
@@ -48,12 +49,30 @@ object WidgetSync {
         }
     }
 
+    /** Every CronPaw widget, by its Glance class. */
+    private val widgets: List<Pair<Class<out GlanceAppWidget>, () -> GlanceAppWidget>> = listOf(
+        AgendaGlance::class.java to { AgendaGlance() },
+        NextGlance::class.java to { NextGlance() },
+        MonthGlance::class.java to { MonthGlance() },
+    )
+
+    private suspend fun placed(context: Context, type: Class<out GlanceAppWidget>): Boolean =
+        runCatching { GlanceAppWidgetManager(context).getGlanceIds(type) }.getOrDefault(emptyList()).isNotEmpty()
+
     suspend fun update(context: Context) {
-        val ids = runCatching { GlanceAppWidgetManager(context).getGlanceIds(AgendaGlance::class.java) }.getOrDefault(emptyList())
-        if (ids.isNotEmpty()) {
-            runCatching { AgendaGlance().updateAll(context) }
-            WidgetTick.arm(context)
+        var any = false
+        for ((type, make) in widgets) {
+            if (!placed(context, type)) continue
+            any = true
+            runCatching { make().updateAll(context) }
         }
+        if (any) WidgetTick.arm(context, countdown = placed(context, NextGlance::class.java))
+    }
+
+    /** One kind of widget is gone; stop the background refresh once none is left. */
+    fun disabled(context: Context) {
+        val app = context.applicationContext
+        scope.launch { if (widgets.none { placed(app, it.first) }) cancel(app) }
     }
 
     fun schedule(context: Context) {
@@ -132,15 +151,21 @@ class WidgetTick : BroadcastReceiver() {
     }
 
     companion object {
-        fun arm(context: Context) {
+        /** [countdown]: a 下一个 widget is placed, whose 「40 分钟后」 moves on in five-minute steps. */
+        fun arm(context: Context, countdown: Boolean = false) {
             val now = System.currentTimeMillis()
             val midnight = LocalDate.now().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-            val next = Agenda.items.value.asSequence()
+            var next = Agenda.items.value.asSequence()
                 .filter { !it.allDay }
                 .flatMap { sequenceOf(it.start, it.end) }
                 .filter { it > now + 1_000 }
                 .minOrNull()
                 ?.coerceAtMost(midnight) ?: midnight
+            // Only while the next one is close (or on now): beyond three hours the text moves by the hour.
+            NextGlance.next(Agenda.items.value, now)?.takeIf { countdown }?.let { item ->
+                val left = (if (item.start > now) item.start else item.end) - now
+                if (left < 3 * 3_600_000L) next = minOf(next, now + if (left < 10 * 60_000L) 60_000L else 5 * 60_000L)
+            }
             val am = context.getSystemService(AlarmManager::class.java) ?: return
             val intent = PendingIntent.getBroadcast(
                 context, 0, Intent(context, WidgetTick::class.java),

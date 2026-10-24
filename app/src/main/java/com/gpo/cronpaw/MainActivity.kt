@@ -1,5 +1,6 @@
 package com.gpo.cronpaw
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -24,10 +25,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.gpo.cronpaw.core.agenda.Agenda
+import com.gpo.cronpaw.feature.home.HomeRequests
 import com.gpo.cronpaw.navigation.CronNavHost
 import com.gpo.cronpaw.ui.components.LocalSnackbarHost
 import com.gpo.cronpaw.ui.components.LocalToastScope
 import com.gpo.cronpaw.ui.theme.PawTheme
+import com.gpo.cronpaw.widget.WidgetOpen
+import java.time.LocalDate
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,6 +42,7 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) window.isNavigationBarContrastEnforced = false
+        if (savedInstanceState == null) openFrom(intent)
         setContent {
             PawTheme {
                 val snackbar = remember { SnackbarHostState() }
@@ -68,6 +73,20 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        openFrom(intent)
+    }
+
+    /** A widget's tap: go to that day, and open the item's sheet when it named one. */
+    private fun openFrom(intent: Intent?) {
+        if (intent == null || !intent.hasExtra(WidgetOpen.Date)) return
+        val date = LocalDate.ofEpochDay(intent.getLongExtra(WidgetOpen.Date, LocalDate.now().toEpochDay()))
+        Agenda.init(this)
+        val item = intent.getStringExtra(WidgetOpen.Item)?.let { key -> Agenda.items.value.firstOrNull { it.key == key } }
+        HomeRequests.jump.value = HomeRequests.Jump(date, open = item)
     }
 
     override fun onResume() {
