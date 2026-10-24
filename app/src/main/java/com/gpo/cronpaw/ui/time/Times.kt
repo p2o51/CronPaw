@@ -42,5 +42,7 @@ object Times {
         else -> "${minutes / 60}:${(minutes % 60).toString().padStart(2, '0')}" to "小时"
     }
 
-    fun durationText(minutes: Int): String = duration(minutes).let { (v, u) -> "$v$u" }
+    /** In a sentence (共…, 设为默认): 2小时10分 rather than 2:10小时. */
+    fun durationText(minutes: Int): String =
+        if (minutes > 60 && minutes % 30 != 0) "${minutes / 60}小时${minutes % 60}分" else duration(minutes).let { (v, u) -> "$v$u" }
 }
