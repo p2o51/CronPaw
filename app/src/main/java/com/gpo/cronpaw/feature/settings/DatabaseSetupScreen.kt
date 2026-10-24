@@ -1,5 +1,7 @@
 package com.gpo.cronpaw.feature.settings
 
+import com.gpo.cronpaw.ui.components.seam.seamGraphic
+import com.gpo.cronpaw.ui.components.seam.seamViewport
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -88,12 +90,13 @@ private fun Picker(nav: Nav, onPick: (String) -> Unit) {
         }
         l == null -> LoadingState()
         l.isEmpty() -> Text("没有可添加的数据库。到设置里重新连接 Notion，在授权页勾上要用的数据库。", Modifier.padding(24.dp), color = cs.onSurfaceVariant)
-        else -> Column(Modifier.verticalScroll(rememberScrollState()).padding(12.dp)) {
+        else -> { val scroll = rememberScrollState(); Column(Modifier.seamViewport(scroll).verticalScroll(scroll).padding(12.dp)) {
             l.forEach { db ->
                 Row(
                     Modifier
                         .fillMaxWidth()
                         .padding(vertical = 2.dp)
+                        .seamGraphic()
                         .clip(RoundedCornerShape(18.dp))
                         .background(cs.surfaceContainer)
                         .clickable { onPick(db.id) }
@@ -105,7 +108,7 @@ private fun Picker(nav: Nav, onPick: (String) -> Unit) {
                     Icon(YoinSymbols.ChevronRight, null, tint = cs.onSurfaceVariant)
                 }
             }
-        }
+        } }
     }
 }
 
@@ -147,7 +150,8 @@ private fun Setup(nav: Nav, id: String, isNew: Boolean) {
     if (error != null) { Text(error!!, Modifier.padding(24.dp)); return }
     if (s == null) { LoadingState(); return }
 
-    Column(Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+    val scroll = rememberScrollState()
+    Column(Modifier.seamViewport(scroll).verticalScroll(scroll).navigationBarsPadding()) {
         Text(s.title, Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
 
         Section("日期属性") {

@@ -1,5 +1,8 @@
 package com.gpo.cronpaw.feature.home
 
+import com.gpo.cronpaw.ui.components.seam.seamGraphic
+import com.gpo.cronpaw.ui.components.seam.seamText
+import com.gpo.cronpaw.ui.components.seam.seamViewport
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -98,18 +101,18 @@ fun ScheduleView(
     }
     val cs = MaterialTheme.colorScheme
     val now = remember { System.currentTimeMillis() }
-    LazyColumn(modifier, state = list, contentPadding = PaddingValues(start = 8.dp, end = 12.dp, bottom = 120.dp)) {
+    LazyColumn(modifier.seamViewport(list), state = list, contentPadding = PaddingValues(start = 8.dp, end = 12.dp, bottom = 120.dp)) {
         items(rows, key = { it.key }) { row ->
             when (row) {
                 is ScheduleRow.Month -> Text(
                     if (row.month.year != LocalDate.now().year) "${row.month.year}年${row.month.monthValue}月" else "${row.month.monthValue}月",
-                    Modifier.padding(start = 12.dp, top = 20.dp, bottom = 6.dp),
+                    Modifier.padding(start = 12.dp, top = 20.dp, bottom = 6.dp).seamText(),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
                 is ScheduleRow.Day -> Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                     val today = row.date == LocalDate.now()
-                    Column(Modifier.width(56.dp).padding(top = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(Modifier.width(56.dp).padding(top = 4.dp).seamText(), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(Times.weekday(row.date), style = MaterialTheme.typography.labelSmall, color = if (today) cs.primary else cs.onSurfaceVariant)
                         Box(
                             Modifier.size(36.dp).clip(CircleShape).background(if (today) cs.primary else Color.Transparent),
@@ -133,6 +136,7 @@ fun ScheduleView(
                             Row(
                                 Modifier
                                     .fillMaxWidth()
+                                    .seamGraphic()
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(bg)
                                     .clickable { onItem(item) }

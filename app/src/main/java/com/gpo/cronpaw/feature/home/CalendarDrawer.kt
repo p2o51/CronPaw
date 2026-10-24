@@ -1,5 +1,9 @@
 package com.gpo.cronpaw.feature.home
 
+import androidx.compose.foundation.lazy.rememberLazyListState
+import com.gpo.cronpaw.ui.components.seam.seamGraphic
+import com.gpo.cronpaw.ui.components.seam.seamText
+import com.gpo.cronpaw.ui.components.seam.seamViewport
 import androidx.compose.material3.IconButton
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
@@ -69,7 +73,8 @@ fun CalendarDrawer(
         else ModalDrawerSheet(drawerContainerColor = cs.surfaceContainerLow) { content() }
     }
     sheet {
-        LazyColumn(Modifier.statusBarsPadding().navigationBarsPadding(), contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp)) {
+        val list = rememberLazyListState()
+        LazyColumn(Modifier.statusBarsPadding().navigationBarsPadding().seamViewport(list), state = list, contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp)) {
             item {
                 // The name, and 设置 across from it: always in reach, not at the end of a long list.
                 Row(Modifier.fillMaxWidth().padding(start = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -77,7 +82,7 @@ fun CalendarDrawer(
                     IconButton(onClick = { haptics.tick(); onSettings() }) { Icon(YoinSymbols.Settings, "设置") }
                 }
                 Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(cs.surfaceContainer).padding(4.dp),
+                    Modifier.fillMaxWidth().seamGraphic().clip(RoundedCornerShape(20.dp)).background(cs.surfaceContainer).padding(4.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     listOf(1 to "1天", 3 to "3天", 7 to "周", AppSettings.ViewMonth to "月", AppSettings.ViewSchedule to "日程").forEach { (n, label) ->
@@ -145,7 +150,7 @@ fun CalendarDrawer(
 private fun SectionLabel(text: String) {
     Text(
         text,
-        Modifier.padding(start = 12.dp, top = 12.dp, bottom = 4.dp),
+        Modifier.padding(start = 12.dp, top = 12.dp, bottom = 4.dp).seamText(),
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 1,
@@ -160,6 +165,7 @@ private fun ToggleRow(color: Color, shown: Boolean, title: String, trailing: Str
     Row(
         Modifier
             .fillMaxWidth()
+            .seamText()
             .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
@@ -192,7 +198,7 @@ private fun ToggleRow(color: Color, shown: Boolean, title: String, trailing: Str
 @Composable
 private fun ActionRow(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().seamText().clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)

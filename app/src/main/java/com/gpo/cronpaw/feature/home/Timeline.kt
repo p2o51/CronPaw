@@ -1,5 +1,8 @@
 package com.gpo.cronpaw.feature.home
 
+import com.gpo.cronpaw.ui.components.seam.seamGraphic
+import com.gpo.cronpaw.ui.components.seam.seamText
+import com.gpo.cronpaw.ui.components.seam.seamViewport
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -185,7 +188,8 @@ fun Timeline(
                 .onGloballyPositioned { state.viewport = it.boundsInRoot() }
                 .pinchToZoomHours(state),
         ) {
-            Row(Modifier.fillMaxWidth().verticalScroll(state.scroll)) {
+            // Yoin's seam: what scrolls up under the day header dissolves instead of being cut.
+            Row(Modifier.fillMaxWidth().seamViewport(state.scroll).verticalScroll(state.scroll)) {
                 HourGutter(state.hourDp)
                 HorizontalPager(
                     state.pager,
@@ -290,7 +294,7 @@ private fun DayHeader(day: LocalDate, allDay: List<AgendaItem>, onItem: (AgendaI
 @Composable
 private fun HourGutter(hourDp: Dp) {
     val cs = MaterialTheme.colorScheme
-    Column(Modifier.width(Gutter)) {
+    Column(Modifier.width(Gutter).seamText()) {
         for (h in 0 until 24) {
             Box(Modifier.height(hourDp).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                 if (h > 0) Text(
@@ -458,6 +462,7 @@ private fun ItemBlock(
     val currentMover by rememberUpdatedState(mover)
     Row(
         modifier
+            .seamGraphic()
             .onGloballyPositioned { coords = it }
             .pointerInput(item.key) {
                 detectDragGesturesAfterLongPress(

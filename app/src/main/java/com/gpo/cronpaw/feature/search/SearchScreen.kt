@@ -1,5 +1,9 @@
 package com.gpo.cronpaw.feature.search
 
+import androidx.compose.foundation.lazy.rememberLazyListState
+import com.gpo.cronpaw.ui.components.seam.seamText
+import com.gpo.cronpaw.ui.components.seam.seamGraphic
+import com.gpo.cronpaw.ui.components.seam.seamViewport
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -172,12 +176,14 @@ fun SearchScreen(nav: Nav) {
             )
             if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(YoinSymbols.Close, "清空") }
         }
-        LazyColumn(contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
+        val list = rememberLazyListState()
+        LazyColumn(Modifier.seamViewport(list), state = list, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
             items(ranges, key = { "r:${it.from}:${it.note}" }) { r ->
                 Row(
                     Modifier
                         .fillMaxWidth()
                         .padding(vertical = 2.dp)
+                        .seamGraphic()
                         .clip(RoundedCornerShape(18.dp))
                         .background(cs.secondaryContainer)
                         .clickable {
@@ -212,6 +218,7 @@ fun SearchScreen(nav: Nav) {
                     Modifier
                         .fillMaxWidth()
                         .padding(vertical = 2.dp)
+                        .seamGraphic()
                         .clip(RoundedCornerShape(18.dp))
                         .background(cs.surfaceContainer)
                         .clickable {

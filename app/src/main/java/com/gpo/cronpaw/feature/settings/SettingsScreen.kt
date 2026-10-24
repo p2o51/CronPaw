@@ -1,5 +1,8 @@
 package com.gpo.cronpaw.feature.settings
 
+import com.gpo.cronpaw.ui.components.seam.seamGraphic
+import com.gpo.cronpaw.ui.components.seam.seamText
+import com.gpo.cronpaw.ui.components.seam.seamViewport
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
@@ -98,7 +101,9 @@ fun SettingsScreen(nav: Nav) {
 
     Column(Modifier.fillMaxSize().background(cs.surface)) {
         PawTopBar("设置", onBack = { nav.pop() })
-        Column(Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding().padding(horizontal = 12.dp)) {
+        val scroll = rememberScrollState()
+        // Yoin's seam: the page dissolves under the top bar instead of being cut by it.
+        Column(Modifier.seamViewport(scroll).verticalScroll(scroll).navigationBarsPadding().padding(horizontal = 12.dp)) {
             // ── Notion: where things stand ──
             Column(
                 Modifier
@@ -290,7 +295,7 @@ fun SettingsScreen(nav: Nav) {
 private fun GroupTitle(text: String) {
     Text(
         text,
-        Modifier.padding(start = 20.dp, top = 32.dp, bottom = 8.dp),
+        Modifier.padding(start = 20.dp, top = 32.dp, bottom = 8.dp).seamText(),
         style = MaterialTheme.typography.labelMedium,
         letterSpacing = androidx.compose.ui.unit.TextUnit(1f, androidx.compose.ui.unit.TextUnitType.Sp),
         fontWeight = FontWeight.Bold,
@@ -301,7 +306,7 @@ private fun GroupTitle(text: String) {
 @Composable
 private fun Card(content: @Composable () -> Unit) {
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(MaterialTheme.colorScheme.surfaceContainer).padding(vertical = 4.dp),
+        Modifier.fillMaxWidth().seamGraphic().clip(RoundedCornerShape(28.dp)).background(MaterialTheme.colorScheme.surfaceContainer).padding(vertical = 4.dp),
     ) { content() }
 }
 
