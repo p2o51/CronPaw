@@ -90,6 +90,7 @@ fun ItemSheet(item: AgendaItem, onDismiss: () -> Unit) {
     val notion = live.source as? Source.Notion
     val db = notion?.let { n -> dbs.firstOrNull { it.id == n.databaseId } }
     var props by remember { mutableStateOf<List<PropValue>>(emptyList()) }
+    var picked by remember { mutableStateOf<String?>(null) }
     var showAll by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     LaunchedEffect(live.key, live.done) {
@@ -218,11 +219,18 @@ fun ItemSheet(item: AgendaItem, onDismiss: () -> Unit) {
             if (db != null) {
                 val status = props.firstOrNull { it.name == db.statusProp }
                 if (status != null && status.type != "checkbox") {
+                    // Show the choice at once: a tapped chip, or the todo ticked above, before Notion answers.
+                    val shown = picked ?: when {
+                        db.doneValue == null -> status.text
+                        live.done -> db.doneValue
+                        status.text == db.doneValue -> db.todoValue ?: status.text
+                        else -> status.text
+                    }
                     Block {
                         Label(status.name)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             status.options.forEach { opt ->
-                                val selected = opt.name == status.text
+                                val selected = opt.name == shown
                                 val (bg, ink) = NotionRepo.optionColors(opt.color, dark)
                                 Text(
                                     opt.name,
@@ -231,13 +239,21 @@ fun ItemSheet(item: AgendaItem, onDismiss: () -> Unit) {
                                         .background(if (selected) Color(bg) else cs.surfaceContainerHighest)
                                         .clickable {
                                             haptics.tick()
+                                            val before = live
+                                            picked = opt.name
+                                            if (db.doneValue != null) Agenda.applyLocal(before.copy(done = opt.name == db.doneValue))
                                             scope.launch {
                                                 runCatching { NotionRepo.setOption(notion.pageId, status.name, status.type, opt.name) }
                                                     .onSuccess {
                                                         props = NotionRepo.properties(db, notion.pageId)
+                                                        picked = null
                                                         Agenda.afterWrite()
                                                     }
-                                                    .onFailure { toast("没改成") }
+                                                    .onFailure {
+                                                        picked = null
+                                                        Agenda.applyLocal(before)
+                                                        toast("没改成")
+                                                    }
                                             }
                                         }
                                         .padding(horizontal = 12.dp, vertical = 6.dp),

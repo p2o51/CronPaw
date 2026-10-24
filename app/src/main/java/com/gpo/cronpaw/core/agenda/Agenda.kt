@@ -51,6 +51,7 @@ object Agenda {
 
     /** Optimistic local edits not yet confirmed by a reload: key → replacement (null = removed). */
     private val overlay = mutableMapOf<String, AgendaItem?>()
+    private val overlaidAt = mutableMapOf<String, Long>()
 
     /** Safe to call again (the widget and its jobs may start the process). */
     fun init(context: Context) {
@@ -122,7 +123,9 @@ object Agenda {
             _loading.value = true
             val (from, to) = bounds()
             notionItems = NotionRepo.items(from, to)
-            overlay.keys.removeAll { it.startsWith("notion:") || it.startsWith("new:notion") }
+            // A write still in flight isn't in the query yet: keep its local copy a little longer.
+            val now = System.currentTimeMillis()
+            overlay.keys.removeAll { it.startsWith("new:notion") || it.startsWith("notion:") && now - (overlaidAt[it] ?: 0) > 15_000 }
             publish()
             _loading.value = false
             val counts = mutableMapOf<String, Int>()
@@ -147,11 +150,13 @@ object Agenda {
     /** Shows [item] at once (a new item, a moved one, a ticked todo) before the source confirms. */
     fun applyLocal(item: AgendaItem) {
         overlay[item.key] = item
+        overlaidAt[item.key] = System.currentTimeMillis()
         publish()
     }
 
     fun removeLocal(key: String) {
         overlay[key] = null
+        overlaidAt[key] = System.currentTimeMillis()
         publish()
     }
 

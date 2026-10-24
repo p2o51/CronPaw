@@ -73,6 +73,31 @@ object NotionRepo {
     /** Raw pages by page id from the latest queries: the sheet reads properties from here. */
     private val pages = mutableMapOf<String, JsonObject>()
 
+    /** Pages we just wrote, and when: Notion's query lags a few seconds behind a write. */
+    private val written = mutableMapOf<String, Long>()
+
+    private fun wrote(page: JsonObject) {
+        val id = page.str("id")
+        pages[id] = page
+        written[id] = System.currentTimeMillis()
+    }
+
+    /**
+     * A page from a query, unless it is older than our own write: for a minute after a write,
+     * the copy the write returned wins over a query that hasn't caught up.
+     */
+    private fun fromQuery(page: JsonObject): JsonObject {
+        val id = page.str("id")
+        val mine = pages[id]
+        val at = written[id]
+        if (mine != null && at != null && System.currentTimeMillis() - at < 60_000 &&
+            page.str("last_edited_time") <= mine.str("last_edited_time")
+        ) return mine
+        written.remove(id)
+        pages[id] = page
+        return page
+    }
+
     fun init() {
         _databases.value = runCatching {
             NotionClient.json.decodeFromString(listSerializer, AppSettings.notionDatabases.value)
@@ -107,8 +132,8 @@ object NotionRepo {
         val out = mutableListOf<AgendaItem>()
         for (db in _databases.value.filter { it.enabled }) {
             val result = runCatching { NotionClient.query(db.id, db.dateProp, fromIso, toIso) }.getOrNull() ?: continue
-            for (page in result) {
-                pages[page.str("id")] = page
+            for (raw in result) {
+                val page = fromQuery(raw)
                 toItem(db, page, zone)?.let { out += it }
             }
         }
@@ -121,10 +146,10 @@ object NotionRepo {
     /** Pages with no date yet, not done: the 未排期 tray. Start and end are 0. */
     suspend fun unscheduledItems(db: NotionDb): List<AgendaItem> =
         runCatching { NotionClient.unscheduled(db.id, db.dateProp) }.getOrDefault(emptyList())
+            .map { fromQuery(it) }
             .filter { !isDone(db, it) }
             .map { page ->
                 val pageId = page.str("id")
-                pages[pageId] = page
                 val props = page["properties"]?.jsonObject
                 AgendaItem(
                     key = "notion:$pageId",
@@ -218,8 +243,7 @@ object NotionRepo {
                 }
             })
         }
-        val page = NotionClient.updatePage(pageId, body)
-        pages[pageId] = page
+        wrote(NotionClient.updatePage(pageId, body))
     }
 
     suspend fun setDone(db: NotionDb, pageId: String, done: Boolean) {
@@ -234,7 +258,7 @@ object NotionRepo {
         val page = NotionClient.updatePage(pageId, buildJsonObject {
             put(db.dateProp, buildJsonObject { put("date", dateJson(start, end, allDay)) })
         })
-        pages[pageId] = page
+        wrote(page)
     }
 
     /**
@@ -271,9 +295,8 @@ object NotionRepo {
                 })
             }
         })
-        val id = page.str("id")
-        pages[id] = page
-        return id
+        wrote(page)
+        return page.str("id")
     }
 
     suspend fun setTitle(db: NotionDb, pageId: String, title: String) {
@@ -282,7 +305,7 @@ object NotionRepo {
                 put("title", buildJsonArray { add(buildJsonObject { put("text", buildJsonObject { put("content", title) }) }) })
             })
         })
-        pages[pageId] = page
+        wrote(page)
     }
 
     /** Notion has no delete through the API: the page goes to the trash. */
