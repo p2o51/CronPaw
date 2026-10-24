@@ -2,27 +2,31 @@ package com.gpo.cronpaw.feature.create
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,15 +36,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.gpo.cronpaw.core.agenda.CalendarRepo
 import com.gpo.cronpaw.core.agenda.Target
 import com.gpo.cronpaw.core.notion.NotionClient
 import com.gpo.cronpaw.core.notion.NotionRepo
 import com.gpo.cronpaw.core.notion.PropSchema
+import com.gpo.cronpaw.ui.theme.CronSymbols
 import com.gpo.cronpaw.ui.theme.pawIsDark
 import com.gpo.cronpaw.ui.theme.rememberRichHaptics
 import com.gpo.yoin.symbols.YoinSymbols
@@ -72,85 +81,80 @@ fun MoreFields(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun EventFields(target: Target.Calendar, start: Long, event: CalendarRepo.EventExtras, onEvent: (CalendarRepo.EventExtras) -> Unit) {
     val context = LocalContext.current
     val haptics = rememberRichHaptics()
     var colors by remember(target.info.id) { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
     LaunchedEffect(target.info.id) { colors = CalendarRepo.eventColors(context, target.info.id) }
-
-    // Used now and then, so folded into one row that says what's set; tap to open.
-    var open by remember { mutableStateOf(false) }
     val dow = Instant.ofEpochMilli(start).atZone(ZoneId.systemDefault()).dayOfWeek
-    val summary = listOfNotNull(
-        event.location.ifBlank { null },
-        if (event.notes.isNotBlank()) "有备注" else null,
-        event.reminders.takeIf { it.isNotEmpty() }?.let { r -> "提醒 " + r.joinToString("、") { reminderLabel(it) } },
-        event.rrule?.let { repeatLabel(it, dow) },
-        if (event.colorKey != null) "自选颜色" else null,
-    ).joinToString(" · ")
-    val cs = MaterialTheme.colorScheme
-    Row(
-        Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(16.dp)).background(cs.surfaceContainer)
-            .clickable { haptics.tick(); open = !open }.padding(start = 16.dp, end = 10.dp, top = 12.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            summary.ifBlank { "地点 · 备注 · 提醒 · 重复 · 颜色" },
-            Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (summary.isBlank()) cs.onSurfaceVariant else cs.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Icon(if (open) YoinSymbols.ChevronUp else YoinSymbols.ChevronDown, if (open) "收起" else "展开", tint = cs.onSurfaceVariant)
-    }
-    androidx.compose.animation.AnimatedVisibility(
-        open,
-        enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
-        exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
-    ) {
-    Column(Modifier.fillMaxWidth().padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        // Place and notes side by side would be cramped: place is one line, notes can grow.
-        PlainField(event.location, { onEvent(event.copy(location = it)) }, "地点", singleLine = true)
-        PlainField(event.notes, { onEvent(event.copy(notes = it)) }, "备注", singleLine = false)
 
-        Card {
-            ChipRow("提醒") {
-                val options = listOf(0 to "准时", 5 to "5 分钟", 10 to "10 分钟", 30 to "30 分钟", 60 to "1 小时", 1440 to "1 天")
-                Chip("不提醒", event.reminders.isEmpty()) { haptics.tick(); onEvent(event.copy(reminders = emptyList())) }
-                options.forEach { (m, label) ->
-                    val on = m in event.reminders
-                    Chip(label, on) {
-                        haptics.tick()
-                        onEvent(event.copy(reminders = if (on) event.reminders - m else (event.reminders + m).sorted()))
-                    }
-                }
-            }
-            ChipRow("重复") {
-                val options = listOf(
-                    null to "不重复",
-                    "FREQ=DAILY" to "每天",
-                    "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR" to "工作日",
-                    "FREQ=WEEKLY;BYDAY=${byDay(dow)}" to "每${weekdayName(dow)}",
-                    "FREQ=MONTHLY" to "每月",
-                    "FREQ=YEARLY" to "每年",
-                )
-                options.forEach { (rule, label) ->
-                    Chip(label, event.rrule == rule) { haptics.tick(); onEvent(event.copy(rrule = rule)) }
-                }
-            }
-            if (colors.isNotEmpty()) {
-                ChipRow("颜色") {
-                    ColorDot(Color(target.info.color), event.colorKey == null, "日历色") { haptics.tick(); onEvent(event.copy(colorKey = null)) }
-                    colors.forEach { (key, argb) ->
-                        ColorDot(Color(argb), event.colorKey == key, null) { haptics.tick(); onEvent(event.copy(colorKey = key)) }
-                    }
+    // One list, most used first, every row the same shape: icon, what it is, what's set.
+    // Choices open a menu from their row instead of spilling chips across the sheet.
+    Card {
+        PickRow(
+            icon = { Icon(CronSymbols.Bell, null) },
+            label = "提醒",
+            value = if (event.reminders.isEmpty()) "不提醒" else event.reminders.joinToString("、") { reminderLabel(it) + if (it == 0) "" else "前" },
+            set = event.reminders.isNotEmpty(),
+        ) { close ->
+            Item("不提醒", event.reminders.isEmpty()) { haptics.tick(); onEvent(event.copy(reminders = emptyList())); close() }
+            listOf(0, 5, 10, 30, 60, 1440).forEach { m ->
+                val on = m in event.reminders
+                // Several reminders are allowed, so the menu stays open while ticking them.
+                Item(if (m == 0) "准时" else reminderLabel(m) + "前", on) {
+                    haptics.tick()
+                    onEvent(event.copy(reminders = if (on) event.reminders - m else (event.reminders + m).sorted()))
                 }
             }
         }
+        FieldRow(CronSymbols.Place, event.location, { onEvent(event.copy(location = it)) }, "地点", singleLine = true)
+        PickRow(
+            icon = { Icon(YoinSymbols.Repeat, null) },
+            label = "重复",
+            value = event.rrule?.let { repeatLabel(it, dow) } ?: "不重复",
+            set = event.rrule != null,
+        ) { close ->
+            listOf(
+                null to "不重复",
+                "FREQ=DAILY" to "每天",
+                "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR" to "工作日",
+                "FREQ=WEEKLY;BYDAY=${byDay(dow)}" to "每${weekdayName(dow)}",
+                "FREQ=MONTHLY" to "每月",
+                "FREQ=YEARLY" to "每年",
+            ).forEach { (rule, label) ->
+                Item(label, event.rrule == rule) { haptics.tick(); onEvent(event.copy(rrule = rule)); close() }
+            }
+        }
+        if (colors.isNotEmpty()) {
+            val current = event.colorKey?.let { k -> colors.firstOrNull { it.first == k }?.second } ?: target.info.color
+            PickRow(
+                icon = { Box(Modifier.size(18.dp).clip(CircleShape).background(Color(current))) },
+                label = "颜色",
+                value = if (event.colorKey == null) "跟日历" else "自选",
+                set = event.colorKey != null,
+            ) { close ->
+                FlowRow(
+                    Modifier.width(232.dp).padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ColorDot(Color(target.info.color), event.colorKey == null) { haptics.tick(); onEvent(event.copy(colorKey = null)); close() }
+                    colors.forEach { (key, argb) ->
+                        ColorDot(Color(argb), event.colorKey == key) { haptics.tick(); onEvent(event.copy(colorKey = key)); close() }
+                    }
+                }
+                Text(
+                    "第一个是日历本身的颜色",
+                    Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        FieldRow(YoinSymbols.Note, event.notes, { onEvent(event.copy(notes = it)) }, "备注", singleLine = false)
     }
-}
 }
 
 private fun reminderLabel(m: Int) = when {
@@ -193,16 +197,22 @@ private fun NotionFields(target: Target.Notion, chosen: NotionExtras, onChosen: 
     }
     val list = props ?: return
     if (list.isEmpty()) return
-    Card(Modifier.padding(top = 10.dp)) {
+    Card {
         list.forEach { p ->
             val picked = chosen[p.name]?.second.orEmpty()
             val many = p.type == "multi_select" || p.type == "relation"
-            ChipRow(p.name) {
+            val names = p.options.filter { (it.id ?: it.name) in picked }.map { it.name }
+            PickRow(
+                icon = { Icon(if (p.type == "relation") CronSymbols.Database else YoinSymbols.Filter, null) },
+                label = p.name,
+                value = names.joinToString("、").ifBlank { "未选" },
+                set = names.isNotEmpty(),
+            ) { close ->
                 p.options.forEach { opt ->
                     val value = opt.id ?: opt.name
                     val on = value in picked
-                    val colors = if (p.type == "relation") null else NotionRepo.optionColors(opt.color, dark)
-                    Chip(opt.name, on, colors?.let { Color(it.first) to Color(it.second) }) {
+                    val dot = if (p.type == "relation") null else NotionRepo.optionColors(opt.color, dark).first
+                    Item(opt.name, on, dot?.let { Color(it) }) {
                         haptics.tick()
                         val next = when {
                             on -> picked - value
@@ -210,6 +220,7 @@ private fun NotionFields(target: Target.Notion, chosen: NotionExtras, onChosen: 
                             else -> listOf(value)
                         }
                         onChosen(if (next.isEmpty()) chosen - p.name else chosen + (p.name to (p.type to next)))
+                        if (!many) close()
                     }
                 }
             }
@@ -220,87 +231,103 @@ private fun NotionFields(target: Target.Notion, chosen: NotionExtras, onChosen: 
 @Composable
 private fun Card(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Column(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(MaterialTheme.colorScheme.surfaceContainer).padding(vertical = 6.dp),
+        modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(22.dp)).background(MaterialTheme.colorScheme.surfaceContainer).padding(vertical = 4.dp),
     ) { content() }
 }
 
-/** A small label, then its chips in a line that scrolls sideways. */
+/** Icon, label, what's chosen on the right; tapping opens [menu] under the row. */
 @Composable
-private fun ChipRow(label: String, chips: @Composable () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            label,
-            Modifier.width(64.dp).padding(start = 14.dp),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+private fun PickRow(
+    icon: @Composable () -> Unit,
+    label: String,
+    value: String,
+    set: Boolean,
+    menu: @Composable ColumnScope.(close: () -> Unit) -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val haptics = rememberRichHaptics()
+    var open by remember { mutableStateOf(false) }
+    Box {
         Row(
-            Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(end = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable { haptics.tick(); open = true }.padding(start = 16.dp, end = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-        ) { chips() }
+        ) {
+            Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                CompositionLocalProvider(LocalContentColor provides cs.onSurfaceVariant) { icon() }
+            }
+            Spacer(Modifier.width(14.dp))
+            Text(label, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.width(12.dp))
+            Text(
+                value,
+                Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (set) FontWeight.Bold else FontWeight.Normal,
+                color = if (set) cs.primary else cs.onSurfaceVariant,
+                textAlign = TextAlign.End,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Icon(YoinSymbols.UnfoldMore, null, Modifier.padding(start = 4.dp).size(18.dp), tint = cs.onSurfaceVariant)
+        }
+        DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            offset = DpOffset(16.dp, 0.dp),
+            modifier = Modifier.heightIn(max = 360.dp),
+        ) { menu { open = false } }
     }
 }
 
+/** A menu line: an optional colour dot, the name, a check when it's on. */
 @Composable
-private fun Chip(label: String, on: Boolean, colors: Pair<Color, Color>? = null, onClick: () -> Unit) {
+private fun Item(label: String, on: Boolean, dot: Color? = null, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    val (bg, ink) = when {
-        on && colors != null -> colors
-        on -> cs.primary to cs.onPrimary
-        else -> cs.surfaceContainerHighest to cs.onSurfaceVariant
-    }
-    Text(
-        label,
-        Modifier.clip(CircleShape).background(bg).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 7.dp),
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
-        color = ink,
-        maxLines = 1,
+    DropdownMenuItem(
+        text = { Text(label, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, color = if (on) cs.primary else cs.onSurface) },
+        onClick = onClick,
+        leadingIcon = dot?.let { c -> { Box(Modifier.size(12.dp).clip(CircleShape).background(c)) } },
+        trailingIcon = { if (on) Icon(YoinSymbols.Check, null, tint = cs.primary) else Spacer(Modifier.size(24.dp)) },
     )
 }
 
 @Composable
-private fun ColorDot(color: Color, on: Boolean, label: String?, onClick: () -> Unit) {
+private fun ColorDot(color: Color, on: Boolean, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Box(
+        Modifier.size(36.dp).clip(CircleShape).clickable(onClick = onClick)
+            .then(if (on) Modifier.border(2.dp, cs.onSurface, CircleShape) else Modifier)
+            .padding(4.dp).clip(CircleShape).background(color),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (on) Icon(YoinSymbols.Check, null, Modifier.size(16.dp), tint = Color.White)
+    }
+}
+
+/** A row you type into: same icon column as the pick rows, the placeholder is the label. */
+@Composable
+private fun FieldRow(icon: ImageVector, value: String, onValue: (String) -> Unit, placeholder: String, singleLine: Boolean) {
     val cs = MaterialTheme.colorScheme
     Row(
-        Modifier.clip(CircleShape).clickable(onClick = onClick).padding(2.dp),
+        Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(start = 16.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier.size(28.dp).clip(CircleShape).background(color)
-                .then(if (on) Modifier.border(3.dp, cs.onSurface, CircleShape) else Modifier),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (on) Icon(YoinSymbols.Check, null, Modifier.size(16.dp), tint = Color.White)
-        }
-        if (label != null) {
-            Spacer(Modifier.width(6.dp))
-            Text(label, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-            Spacer(Modifier.width(4.dp))
-        }
+        Icon(icon, null, Modifier.size(24.dp), tint = cs.onSurfaceVariant)
+        Spacer(Modifier.width(14.dp))
+        BasicTextField(
+            value = value,
+            onValueChange = onValue,
+            modifier = Modifier.weight(1f).padding(vertical = 14.dp),
+            singleLine = singleLine,
+            maxLines = if (singleLine) 1 else 4,
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = cs.onSurface),
+            cursorBrush = SolidColor(cs.primary),
+            decorationBox = { inner ->
+                Box {
+                    if (value.isEmpty()) Text(placeholder, style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant)
+                    inner()
+                }
+            },
+        )
     }
-}
-
-@Composable
-private fun PlainField(value: String, onValue: (String) -> Unit, placeholder: String, singleLine: Boolean) {
-    val cs = MaterialTheme.colorScheme
-    TextField(
-        value = value,
-        onValueChange = onValue,
-        modifier = Modifier.fillMaxWidth(),
-        placeholder = { Text(placeholder) },
-        singleLine = singleLine,
-        minLines = 1,
-        maxLines = if (singleLine) 1 else 4,
-        shape = RoundedCornerShape(18.dp),
-        colors = TextFieldDefaults.colors(
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-            focusedContainerColor = cs.surfaceContainer,
-            unfocusedContainerColor = cs.surfaceContainer,
-        ),
-    )
 }

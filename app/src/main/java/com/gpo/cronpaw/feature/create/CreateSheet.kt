@@ -1,6 +1,13 @@
 package com.gpo.cronpaw.feature.create
 
 import android.Manifest
+import kotlin.math.roundToInt
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.material3.ModalBottomSheetProperties
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.activity.compose.BackHandler
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -27,6 +34,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -55,6 +64,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -113,7 +123,7 @@ private enum class Stage { Voice, Confirm }
  * Voice → confirm. The voice stage listens until the stop button; the confirm stage
  * saves itself after a short countdown unless the screen is touched.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun CreateSheet(
     draft: Draft,
@@ -229,7 +239,21 @@ fun CreateSheet(
         onDismissRequest = onDismiss,
         sheetState = sheet,
         containerColor = cs.surfaceContainerLow,
+        // Back is ours: with the keyboard up it only drops the keyboard, so typed text isn't lost.
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
     ) {
+        val imeUp = WindowInsets.isImeVisible
+        val keyboard = LocalSoftwareKeyboardController.current
+        val focus = LocalFocusManager.current
+        BackHandler {
+            if (imeUp) {
+                keyboard?.hide()
+                focus.clearFocus()
+            } else scope.launch {
+                runCatching { sheet.hide() }
+                onDismiss()
+            }
+        }
         Column(
             Modifier
                 .fillMaxWidth()
@@ -297,9 +321,11 @@ fun CreateSheet(
                         more = {
                             if (draft.editing == null) {
                                 Text("放到哪", Modifier.padding(start = 4.dp, bottom = 6.dp), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                                Row(
-                                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                // Wraps instead of scrolling, so every calendar is in sight on a phone.
+                                FlowRow(
+                                    Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
                                 ) {
                                     targets.forEach { t ->
                                         TargetChip(t, selected = t.id == target?.id) { haptics.tick(); target = t }
@@ -609,19 +635,25 @@ private fun ConfirmStage(
                     cs.primaryContainer.copy(alpha = 0.45f), cs.onSurface, Modifier.weight(1f),
                 ) { haptics.tick(); picking = "end" }
             }
-            // The usual lengths, equal widths so all six fit on a phone.
-            Row(
-                Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(16.dp)).background(cs.surfaceContainer).padding(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            // Length on a slider in quarter hours up to 3 hours; anything finer or longer, tap 结束.
+            var lastTick by remember { mutableIntStateOf(minutes) }
+            Column(
+                Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(22.dp)).background(cs.surfaceContainer)
+                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 10.dp),
             ) {
-                listOf(15 to "15分", 30 to "30分", 45 to "45分", 60 to "1时", 90 to "1.5时", 120 to "2时").forEach { (m, label) ->
-                    val on = m == minutes
-                    val bg by animateColorAsState(if (on) cs.primary else Color.Transparent, YoinMotion.defaultEffectsSpec(), label = "len")
-                    Box(
-                        Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).background(bg).clickable { haptics.tick(); onMinutes(m) },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, color = if (on) cs.onPrimary else cs.onSurfaceVariant, maxLines = 1)
+                Slider(
+                    value = minutes.coerceIn(15, 180).toFloat(),
+                    onValueChange = { v ->
+                        val m = (v / 15f).roundToInt() * 15
+                        if (m != lastTick) { lastTick = m; haptics.tick(); onMinutes(m) }
+                    },
+                    valueRange = 15f..180f,
+                    steps = 10,
+                )
+                Row(Modifier.fillMaxWidth()) {
+                    listOf("15分", "1时", "2时", "3时").forEachIndexed { i, label ->
+                        if (i > 0) Spacer(Modifier.weight(if (i == 1) 3f else 4f))
+                        Text(label, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
                     }
                 }
             }
