@@ -249,7 +249,8 @@ fun CreateSheet(
                 .padding(bottom = 16.dp),
         ) {
             // Where it goes: Notion databases and writable calendars.
-            if (draft.editing == null) {
+            // While speaking, where it goes sits on top; on the confirm page it moves down to its own group.
+            if (draft.editing == null && stage == Stage.Voice) {
                 Row(
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -293,6 +294,17 @@ fun CreateSheet(
                         onAllDay = { allDay = it },
                         onSave = { save(auto = it) },
                         more = {
+                            if (draft.editing == null) {
+                                Text("放到哪", Modifier.padding(start = 4.dp, bottom = 6.dp), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                                Row(
+                                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    targets.forEach { t ->
+                                        TargetChip(t, selected = t.id == target?.id) { haptics.tick(); target = t }
+                                    }
+                                }
+                            }
                             if (draft.editing == null) MoreFields(
                                 target = target,
                                 start = effStart,
@@ -532,7 +544,7 @@ private fun ConfirmStage(
                 }
             }
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(24.dp))
         val day = Times.date(start)
         // The day as a pill with 全天 beside it, then when as two blocks of unequal weight:
         // the start large, the length smaller and quieter.
@@ -629,8 +641,10 @@ private fun ConfirmStage(
             }
           }
         }
+        // Groups: title, when, where; a clear gap between each, tight inside.
+        Spacer(Modifier.height(24.dp))
         more()
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(24.dp))
         // Saved: the bar draws in to a round tick.
         val shrink by animateFloatAsState(if (saved) 1f else 0f, YoinMotion.defaultSpatialSpec(), label = "saved")
         BoxWithConstraints(Modifier.fillMaxWidth()) {

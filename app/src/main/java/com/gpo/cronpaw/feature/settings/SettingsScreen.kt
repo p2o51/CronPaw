@@ -64,9 +64,9 @@ import com.gpo.cronpaw.ui.theme.rememberRichHaptics
 import com.gpo.yoin.symbols.YoinSymbols
 
 /**
- * Settings in layers, each a different shape: the Notion connection as a large colour
- * block, a row of round colour buttons for one-tap actions, the databases as square tiles,
- * then one card of rows whose choices sit inline on the row itself.
+ * Settings by importance, in groups: Notion and its databases, how new items behave,
+ * appearance, about. Tight inside a group, a clear gap and a small title between groups;
+ * choices sit inline on their rows. Disconnecting comes last, on its own.
  */
 @Composable
 fun SettingsScreen(nav: Nav) {
@@ -124,70 +124,74 @@ fun SettingsScreen(nav: Nav) {
                     color = ink.copy(alpha = 0.75f),
                 )
                 oauthStatus?.let { Text(it, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodySmall, color = ink) }
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    if (connected) "重新授权" else "连接 Notion",
+                    Modifier
+                        .clip(CircleShape)
+                        .background(if (connected) ink.copy(alpha = 0.12f) else ink)
+                        .clickable { haptics.tick(); uriHandler.openUri(NotionOAuth.begin().toString()) }
+                        .padding(horizontal = 18.dp, vertical = 10.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = if (connected) ink else cs.tertiaryContainer,
+                )
             }
 
-            // ── One tap: round colour buttons ──
+            // Its databases right under it, as tiles, with + at the end.
             Row(
-                Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 6.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                RoundButton(YoinSymbols.Launch, if (connected) "重新授权" else "连接", cs.primary, cs.onPrimary) {
-                    haptics.tick(); uriHandler.openUri(NotionOAuth.begin().toString())
+                dbs.forEach { db ->
+                    Tile(Modifier.alpha(if (db.enabled) 1f else 0.5f), db.title, onClick = { haptics.tick(); nav.push("db:${db.id}") }) {
+                        Box(
+                            Modifier.fillMaxSize().background(Color(db.color).copy(alpha = 0.22f)),
+                            contentAlignment = Alignment.Center,
+                        ) { Box(Modifier.size(18.dp).clip(RoundedCornerShape(6.dp)).background(Color(db.color))) }
+                    }
                 }
-                RoundButton(YoinSymbols.Add, "添加数据库", cs.secondaryContainer, cs.onSecondaryContainer) {
-                    haptics.tick(); nav.push("db:")
-                }
-                RoundButton(YoinSymbols.Refresh, "重新读取", cs.tertiaryContainer, cs.onTertiaryContainer) {
-                    haptics.tick(); Agenda.refresh(); toast("已刷新")
-                }
-                RoundButton(YoinSymbols.Code, "源代码", cs.surfaceContainerHighest, cs.onSurfaceVariant) {
-                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/p2o51/CronPaw"))) }
-                }
-            }
-
-            // ── Databases: square tiles ──
-            if (dbs.isNotEmpty()) {
-                Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    dbs.forEach { db ->
-                        Column(
-                            Modifier.width(76.dp).alpha(if (db.enabled) 1f else 0.5f).clickable { haptics.tick(); nav.push("db:${db.id}") },
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Box(
-                                Modifier.size(60.dp).clip(RoundedCornerShape(18.dp)).background(Color(db.color).copy(alpha = 0.22f)),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Box(Modifier.size(18.dp).clip(RoundedCornerShape(6.dp)).background(Color(db.color)))
-                            }
-                            Spacer(Modifier.height(6.dp))
-                            Text(db.title, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
+                Tile(Modifier, "添加", onClick = { haptics.tick(); nav.push("db:") }) {
+                    Box(Modifier.fillMaxSize().background(cs.surfaceContainerHigh), contentAlignment = Alignment.Center) {
+                        Icon(YoinSymbols.Add, null, tint = cs.onSurfaceVariant)
                     }
                 }
             }
 
-            // ── Rows, choices inline ──
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp)
-                    .clip(RoundedCornerShape(28.dp))
-                    .background(cs.surfaceContainer)
-                    .padding(vertical = 6.dp),
-            ) {
-                ListRow(CronSymbols.Calendar, "新建时长", "点时间轴空白处，默认这么长 · 分钟") {
+            // ── 新建: how new items behave ──
+            GroupTitle("新建")
+            Card {
+                ListRow(CronSymbols.Calendar, "默认时长", "点时间轴空白处新建 · 分钟") {
                     InlineChoices(listOf(15, 30, 45, 60, 90, 120).map { it to it.toString() }, defaultMinutes) {
                         haptics.tick(); AppSettings.set(AppSettings.defaultMinutes, it)
                     }
                 }
-                ListRow(YoinSymbols.Send, "自动加入", "确认页不碰屏幕，倒计时结束就加入 · 秒") {
+                ListRow(YoinSymbols.Send, "自动加入", "确认页不碰屏幕，倒计时后加入 · 秒") {
                     InlineChoices(listOf(0 to "不", 3 to "3", 4 to "4", 6 to "6"), autoSave) {
                         haptics.tick(); AppSettings.set(AppSettings.autoSaveSeconds, it)
                     }
                 }
+                ListRow(CronSymbols.Keyboard, "快捷入口", onClick = { haptics.tick(); quickOpen = !quickOpen }) {
+                    Text("${quick.lines().count { it.isNotBlank() }} 个", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    Chevron(quickOpen)
+                }
+                Expand(quickOpen) {
+                    Field("每行一个：标题|分钟", quick, { AppSettings.set(AppSettings.quickEntries, it) }, singleLine = false)
+                }
+                ListRow(CronSymbols.Mic, "语音识别", onClick = { haptics.tick(); voiceOpen = !voiceOpen }) {
+                    Text(if (elevenKey.isBlank()) "系统" else "Scribe", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    Chevron(voiceOpen)
+                }
+                Expand(voiceOpen) {
+                    Field("ElevenLabs API key", elevenKey, { AppSettings.set(AppSettings.elevenLabsKey, it.trim()) }, secret = true)
+                    Hint("空着就用系统语音识别。填了就用 Scribe，按用量向 ElevenLabs 付费。")
+                    if (elevenKey.isNotBlank()) Field("模型", model, { AppSettings.set(AppSettings.scribeModel, it.trim()) })
+                }
+            }
+
+            // ── 外观 ──
+            GroupTitle("外观")
+            Card {
                 ListRow(YoinSymbols.LightMode, "主题") {
                     InlineChoices(listOf(0 to "跟随", 1 to "浅色", 2 to "深色"), themeMode) {
                         haptics.tick(); AppSettings.set(AppSettings.themeMode, it)
@@ -196,52 +200,67 @@ fun SettingsScreen(nav: Nav) {
                 ListRow(YoinSymbols.Sparkle, "壁纸取色") {
                     Switch(dynamic, { haptics.tick(); AppSettings.set(AppSettings.dynamicColor, it) })
                 }
-                ListRow(
-                    CronSymbols.Mic, "语音",
-                    onClick = { haptics.tick(); voiceOpen = !voiceOpen },
-                ) {
-                    Text(if (elevenKey.isBlank()) "系统识别" else "Scribe", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-                    Chevron(voiceOpen)
+            }
+
+            // ── 关于 ──
+            GroupTitle("关于")
+            Card {
+                ListRow(YoinSymbols.Refresh, "重新读取日历和 Notion", onClick = { haptics.tick(); Agenda.refresh(); toast("已刷新") }) {}
+                ListRow(YoinSymbols.Code, "源代码", onClick = {
+                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/p2o51/CronPaw"))) }
+                }) {
+                    Text("GitHub", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 }
-                Expand(voiceOpen) {
-                    Field("ElevenLabs API key", elevenKey, { AppSettings.set(AppSettings.elevenLabsKey, it.trim()) }, secret = true)
-                    Hint("空着就用系统语音识别。填了就用 Scribe，按用量向 ElevenLabs 付费。")
-                    if (elevenKey.isNotBlank()) Field("模型", model, { AppSettings.set(AppSettings.scribeModel, it.trim()) })
-                }
-                ListRow(
-                    CronSymbols.Keyboard, "快捷入口",
-                    onClick = { haptics.tick(); quickOpen = !quickOpen },
-                ) {
-                    Text("${quick.lines().count { it.isNotBlank() }} 个", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-                    Chevron(quickOpen)
-                }
-                Expand(quickOpen) {
-                    Field("每行一个：标题|分钟", quick, { AppSettings.set(AppSettings.quickEntries, it) }, singleLine = false)
-                }
-                if (connected) {
-                    ListRow(YoinSymbols.Close, "断开 Notion", onClick = { NotionOAuth.disconnect(); Agenda.refresh(); toast("已断开") }) {}
+                ListRow(YoinSymbols.Info, "版本") {
+                    Text(BuildConfig.VERSION_NAME, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 }
             }
 
-            Text(
-                "CronPaw ${BuildConfig.VERSION_NAME}",
-                Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 32.dp),
-                style = MaterialTheme.typography.labelMedium,
-                color = cs.onSurfaceVariant,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
+            // Disconnecting is rare and drastic: last, on its own, quiet red.
+            if (connected) {
+                Text(
+                    "断开 Notion",
+                    Modifier
+                        .padding(top = 24.dp)
+                        .align(Alignment.CenterHorizontally)
+                        .clip(CircleShape)
+                        .clickable { NotionOAuth.disconnect(); Agenda.refresh(); toast("已断开") }
+                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = cs.error,
+                )
+            }
+            Spacer(Modifier.height(32.dp))
         }
     }
 }
 
+/** Groups are 24dp apart under a small title; rows inside a group touch. */
 @Composable
-private fun RoundButton(icon: ImageVector, label: String, bg: Color, ink: Color, onClick: () -> Unit) {
-    Column(Modifier.width(76.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(56.dp).clip(CircleShape).background(bg).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-            Icon(icon, null, Modifier.size(24.dp), tint = ink)
-        }
+private fun GroupTitle(text: String) {
+    Text(
+        text,
+        Modifier.padding(start = 8.dp, top = 24.dp, bottom = 8.dp),
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
+    )
+}
+
+@Composable
+private fun Card(content: @Composable () -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(MaterialTheme.colorScheme.surfaceContainer).padding(vertical = 4.dp),
+    ) { content() }
+}
+
+@Composable
+private fun Tile(modifier: Modifier, label: String, onClick: () -> Unit, face: @Composable () -> Unit) {
+    Column(modifier.width(72.dp).clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(60.dp).clip(RoundedCornerShape(18.dp))) { face() }
         Spacer(Modifier.height(6.dp))
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
