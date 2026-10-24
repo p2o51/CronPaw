@@ -492,7 +492,7 @@ private fun ItemBlock(
         if (item.todo && !(narrow && compact)) {
             TodoDot(item.done, Color(item.color), ink, onToggleDone, Modifier.padding(end = if (narrow) 2.dp else 4.dp, top = if (compact) 0.dp else 1.dp))
         }
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).seamText()) {
             Text(
                 item.title,
                 style = MaterialTheme.typography.labelMedium.copy(

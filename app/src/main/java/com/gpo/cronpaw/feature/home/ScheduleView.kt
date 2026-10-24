@@ -146,7 +146,7 @@ fun ScheduleView(
                                 if (item.todo) {
                                     TodoDot(item.done, Color(item.color), ink, { onToggleDone(item) }, Modifier.padding(end = 10.dp), size = 18.dp)
                                 }
-                                Column(Modifier.weight(1f)) {
+                                Column(Modifier.weight(1f).seamText()) {
                                     Text(
                                         item.title,
                                         style = MaterialTheme.typography.titleSmall,
