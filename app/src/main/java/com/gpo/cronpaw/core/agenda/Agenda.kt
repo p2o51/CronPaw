@@ -71,6 +71,15 @@ object Agenda {
     val hiddenCalendars: Set<Long>
         get() = AppSettings.hiddenCalendars.value.split(',').mapNotNull { it.toLongOrNull() }.toSet()
 
+    val removedCalendars: Set<Long>
+        get() = AppSettings.removedCalendars.value.split(',').mapNotNull { it.toLongOrNull() }.toSet()
+
+    fun setCalendarRemoved(id: Long, removed: Boolean) {
+        val set = removedCalendars.toMutableSet().apply { if (removed) add(id) else remove(id) }
+        AppSettings.set(AppSettings.removedCalendars, set.joinToString(","))
+        scope.launch { reloadCalendars() }
+    }
+
     fun setCalendarHidden(id: Long, hidden: Boolean) {
         val set = hiddenCalendars.toMutableSet().apply { if (hidden) add(id) else remove(id) }
         AppSettings.set(AppSettings.hiddenCalendars, set.joinToString(","))
@@ -102,7 +111,7 @@ object Agenda {
         val cals = CalendarRepo.calendars(app)
         _calendars.value = cals
         val (from, to) = bounds()
-        calItems = CalendarRepo.instances(app, from, to, cals.associateBy { it.id }, hiddenCalendars)
+        calItems = CalendarRepo.instances(app, from, to, cals.associateBy { it.id }, hiddenCalendars + removedCalendars)
         overlay.keys.removeAll { it.startsWith("cal:") || it.startsWith("new:cal") }
         publish()
     }

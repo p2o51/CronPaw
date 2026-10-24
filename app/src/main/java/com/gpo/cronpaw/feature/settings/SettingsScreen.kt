@@ -91,6 +91,10 @@ fun SettingsScreen(nav: Nav) {
     val connected = token.isNotBlank()
     var voiceOpen by remember { mutableStateOf(false) }
     var quickOpen by remember { mutableStateOf(false) }
+    var calendarsOpen by remember { mutableStateOf(false) }
+    val calendars by Agenda.calendars.collectAsState()
+    val removedRaw by AppSettings.removedCalendars.state.collectAsState()
+    val removed = removedRaw.split(',').mapNotNull { it.toLongOrNull() }.toSet()
 
     Column(Modifier.fillMaxSize().background(cs.surface)) {
         PawTopBar("设置", onBack = { nav.pop() })
@@ -187,6 +191,49 @@ fun SettingsScreen(nav: Nav) {
                     Field("ElevenLabs API key", elevenKey, { AppSettings.set(AppSettings.elevenLabsKey, it.trim()) }, secret = true)
                     Hint("空着就用系统语音识别。填了就用 Scribe，按用量向 ElevenLabs 付费。")
                     if (elevenKey.isNotBlank()) Field("模型", model, { AppSettings.set(AppSettings.scribeModel, it.trim()) })
+                }
+            }
+
+            // ── 日历: which system calendars CronPaw uses at all ──
+            GroupTitle("日历")
+            Card {
+                val off = calendars.count { it.id in removed }
+                ListRow(CronSymbols.Calendar, "用哪些日历", "关掉的不进侧栏、不显示、也不能放进去", onClick = { haptics.tick(); calendarsOpen = !calendarsOpen }) {
+                    Text(if (off == 0) "全部" else "关了 $off 个", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    Chevron(calendarsOpen)
+                }
+                Expand(calendarsOpen) {
+                    calendars.groupBy { it.accountName }.forEach { (account, cals) ->
+                        Text(
+                            account,
+                            Modifier.padding(start = 6.dp, top = 6.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = cs.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        cals.forEach { cal ->
+                            val on = cal.id !in removed
+                            Row(
+                                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                                    .clickable { haptics.tick(); Agenda.setCalendarRemoved(cal.id, on) }
+                                    .padding(start = 6.dp, top = 2.dp, bottom = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(Modifier.size(12.dp).clip(CircleShape).background(Color(cal.color).copy(alpha = if (on) 1f else 0.3f)))
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    cal.name,
+                                    Modifier.weight(1f),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = if (on) cs.onSurface else cs.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Switch(checked = on, onCheckedChange = { haptics.tick(); Agenda.setCalendarRemoved(cal.id, !it) })
+                            }
+                        }
+                    }
                 }
             }
 

@@ -53,6 +53,10 @@ object AppSettings {
     val hourHeight = key("hour_height", 60)
     /** Calendar ids the user hid in the drawer, comma separated. */
     val hiddenCalendars = key("hidden_calendars", "")
+    /** Calendar ids turned off in 设置: gone from the drawer, the views and 放到哪. Comma separated. */
+    val removedCalendars = key("removed_calendars", "")
+    /** Wide screens: whether the side drawer is out. */
+    val sidebarOpen = key("sidebar_open", true)
     /** Default target for new items: "cal:<id>" or "notion:<databaseId>". */
     val defaultTarget = key("default_target", "")
     /** Pinned item keys (AgendaItem.key), newline separated. */

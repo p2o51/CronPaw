@@ -1,5 +1,10 @@
 package com.gpo.cronpaw.feature.home
 
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.NonCancellable
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.expandHorizontally
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
@@ -46,7 +51,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.PermanentNavigationDrawer
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
@@ -137,15 +141,21 @@ fun HomeScreen(nav: Nav) {
     val viewIn = remember { Animatable(1f) }
     LaunchedEffect(viewDays) {
         if (viewDays == 2) { AppSettings.set(AppSettings.viewDays, 3); return@LaunchedEffect } // 2 天 is gone
-        if (shown == viewDays) return@LaunchedEffect
-        viewIn.animateTo(0f, spring(stiffness = Spring.StiffnessHigh))
-        when {
-            viewDays > 0 -> { if (tl.days != viewDays) tl.switchDays(viewDays) }
-            viewDays == AppSettings.ViewMonth -> monthPager.scrollToPage(monthPage(YearMonth.from(if (shown > 0) tl.first else LocalDate.now())))
-            viewDays == AppSettings.ViewSchedule -> scheduleList.scrollToItem(scheduleIndexOf(scheduleRows, if (shown > 0) tl.first else LocalDate.now()))
+        // A switch cut short (two taps in a row, the wide-screen default, unfolding) can leave the
+        // view faded out; whatever happens, the view that ends up chosen is shown.
+        if (shown == viewDays) { viewIn.animateTo(1f); return@LaunchedEffect }
+        try {
+            viewIn.animateTo(0f, spring(stiffness = Spring.StiffnessHigh))
+            when {
+                viewDays > 0 -> { if (tl.days != viewDays) tl.switchDays(viewDays) }
+                viewDays == AppSettings.ViewMonth -> monthPager.scrollToPage(monthPage(YearMonth.from(if (shown > 0) tl.first else LocalDate.now())))
+                viewDays == AppSettings.ViewSchedule -> scheduleList.scrollToItem(scheduleIndexOf(scheduleRows, if (shown > 0) tl.first else LocalDate.now()))
+            }
+            shown = viewDays
+            viewIn.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow))
+        } finally {
+            if (viewIn.value < 1f) withContext(NonCancellable) { viewIn.snapTo(1f) }
         }
-        shown = viewDays
-        viewIn.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow))
     }
     fun openOnTimeline(date: LocalDate) {
         val days = AppSettings.timelineDays.value.takeIf { it > 0 } ?: 3
@@ -321,6 +331,7 @@ fun HomeScreen(nav: Nav) {
     }
 
     val drawer = rememberDrawerState(DrawerValue.Closed)
+    val sideOpen by AppSettings.sidebarOpen.state.collectAsState()
     BackHandler(drawer.isOpen) { scope.launch { drawer.close() } }
 
     val drawerContent: @Composable () -> Unit = {
@@ -368,7 +379,10 @@ fun HomeScreen(nav: Nav) {
                     first = first,
                     last = last,
                     showRange = shown > 1,
-                    onMenu = if (wide) null else ({ scope.launch { drawer.open() } }),
+                    onMenu = {
+                        haptics.tick()
+                        if (wide) AppSettings.set(AppSettings.sidebarOpen, !sideOpen) else scope.launch { drawer.open() }
+                    },
                     onToday = {
                         haptics.tick()
                         scope.launch {
@@ -551,8 +565,15 @@ fun HomeScreen(nav: Nav) {
             }
         }
     }
-    // Wide screens keep the drawer open beside the days.
-    if (wide) PermanentNavigationDrawer(drawerContent) { body() }
+    // Wide screens keep the drawer beside the days; ☰ slides it away and back.
+    if (wide) Row(Modifier.fillMaxSize().background(cs.surface)) {
+        AnimatedVisibility(
+            sideOpen,
+            enter = expandHorizontally(YoinMotion.defaultSpatialSpec(), expandFrom = Alignment.Start) + fadeIn(YoinMotion.defaultEffectsSpec()),
+            exit = shrinkHorizontally(YoinMotion.defaultSpatialSpec(), shrinkTowards = Alignment.Start) + fadeOut(YoinMotion.fastEffectsSpec()),
+        ) { drawerContent() }
+        Box(Modifier.weight(1f).fillMaxHeight()) { body() }
+    }
     else ModalNavigationDrawer(drawerContent, drawerState = drawer, gesturesEnabled = drawer.isOpen) { body() }
 
     selected?.let { ItemSheet(it, onDismiss = { selected = null }) }

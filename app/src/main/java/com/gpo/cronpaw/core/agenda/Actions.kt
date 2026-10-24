@@ -119,7 +119,7 @@ object Actions {
 
     /** Every place a new item can go, the last used first. */
     fun targets(): List<Target> {
-        val cals = Agenda.calendars.value.filter { it.writable && it.id !in Agenda.hiddenCalendars }.map { Target.Calendar(it) }
+        val cals = Agenda.calendars.value.filter { it.writable && it.id !in Agenda.hiddenCalendars && it.id !in Agenda.removedCalendars }.map { Target.Calendar(it) }
         val dbs = NotionRepo.databases.value.filter { it.enabled }.map { Target.Notion(it) }
         val all = dbs + cals
         val last = AppSettings.defaultTarget.value

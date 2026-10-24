@@ -1,5 +1,6 @@
 package com.gpo.cronpaw.feature.home
 
+import androidx.compose.material3.IconButton
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -58,6 +59,8 @@ fun CalendarDrawer(
     val calendars by Agenda.calendars.collectAsState()
     val hiddenRaw by AppSettings.hiddenCalendars.state.collectAsState()
     val hidden = hiddenRaw.split(',').mapNotNull { it.toLongOrNull() }.toSet()
+    val removedRaw by AppSettings.removedCalendars.state.collectAsState()
+    val removed = removedRaw.split(',').mapNotNull { it.toLongOrNull() }.toSet()
     val dbs by NotionRepo.databases.collectAsState()
     val unscheduled by Agenda.unscheduled.collectAsState()
 
@@ -68,7 +71,11 @@ fun CalendarDrawer(
     sheet {
         LazyColumn(Modifier.statusBarsPadding().navigationBarsPadding(), contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp)) {
             item {
-                Text("CronPaw", Modifier.padding(start = 12.dp, top = 8.dp, bottom = 16.dp), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                // The name, and 设置 across from it: always in reach, not at the end of a long list.
+                Row(Modifier.fillMaxWidth().padding(start = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("CronPaw", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = { haptics.tick(); onSettings() }) { Icon(YoinSymbols.Settings, "设置") }
+                }
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(cs.surfaceContainer).padding(4.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -94,7 +101,7 @@ fun CalendarDrawer(
                 Spacer(Modifier.height(16.dp))
             }
 
-            val byAccount = calendars.groupBy { it.accountName }
+            val byAccount = calendars.filter { it.id !in removed }.groupBy { it.accountName }
             byAccount.forEach { (account, cals) ->
                 item(key = "acc:$account") {
                     SectionLabel(account)
@@ -129,7 +136,6 @@ fun CalendarDrawer(
             }
             item(key = "add") {
                 ActionRow(YoinSymbols.Add, "添加数据库", onAddDatabase)
-                ActionRow(YoinSymbols.Settings, "设置", onSettings)
             }
         }
     }
