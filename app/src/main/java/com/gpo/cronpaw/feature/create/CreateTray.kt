@@ -241,3 +241,67 @@ private fun CustomBar(
     }
 }
 
+
+/**
+ * The same bar as the tray's 自定义, for the new-item sheet: drag sideways anywhere on it
+ * in 5-minute ticks, a stronger tick on each hour. It lights up while the finger is on it.
+ */
+@Composable
+fun LengthBar(minutes: Int, onMinutes: (Int) -> Unit, modifier: Modifier = Modifier) {
+    val haptics = rememberRichHaptics()
+    val cs = MaterialTheme.colorScheme
+    val current by rememberUpdatedState(minutes)
+    var active by remember { mutableStateOf(false) }
+    val bg by animateColorAsState(if (active) cs.primary else cs.secondaryContainer, YoinMotion.defaultEffectsSpec(), label = "bar")
+    val ink = if (active) cs.onPrimary else cs.onSecondaryContainer
+    val fill by animateFloatAsState(minutes.coerceAtMost(MaxMinutes) / MaxMinutes.toFloat(), YoinMotion.fastSpatialSpec(), label = "fill")
+    val tickColor = ink.copy(alpha = 0.25f)
+    val fillColor = ink.copy(alpha = 0.16f)
+    val (value, unit) = Times.duration(minutes)
+
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(bg)
+            .drawBehind {
+                drawRoundRect(fillColor, size = Size(size.width * fill, size.height), cornerRadius = CornerRadius(18.dp.toPx()))
+                for (h in 1 until MaxMinutes / 60) {
+                    val x = size.width * h * 60f / MaxMinutes
+                    drawCircle(tickColor, radius = 2.dp.toPx(), center = Offset(x, size.height - 8.dp.toPx()))
+                }
+            }
+            .pointerInput(Unit) {
+                val step = StepWidth.toPx()
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    active = true
+                    var acc = 0f
+                    drag(down.id) { change ->
+                        acc += change.positionChange().x
+                        val steps = (acc / step).toInt()
+                        if (steps != 0) {
+                            acc -= steps * step
+                            val next = (current + steps * 5).coerceIn(MinMinutes, MaxMinutes)
+                            if (next != current) {
+                                onMinutes(next)
+                                if (next % 60 == 0) haptics.lowTick() else haptics.tick()
+                            }
+                        }
+                        change.consume()
+                    }
+                    active = false
+                }
+            }
+            .padding(horizontal = 18.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Row(Modifier.fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
+            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = ink)
+            Text(unit, Modifier.padding(start = 3.dp, top = 4.dp), style = MaterialTheme.typography.labelMedium, color = ink.copy(alpha = 0.7f))
+            Box(Modifier.weight(1f))
+            Text("左右拖动", style = MaterialTheme.typography.labelMedium, color = ink.copy(alpha = 0.7f))
+        }
+    }
+}
