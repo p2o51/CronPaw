@@ -42,7 +42,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.gpo.cronpaw.core.agenda.CalendarRepo
 import com.gpo.cronpaw.core.agenda.Target
@@ -270,12 +269,14 @@ private fun PickRow(
             )
             Icon(YoinSymbols.UnfoldMore, null, Modifier.padding(start = 4.dp).size(18.dp), tint = cs.onSurfaceVariant)
         }
-        DropdownMenu(
-            expanded = open,
-            onDismissRequest = { open = false },
-            offset = DpOffset(16.dp, 0.dp),
-            modifier = Modifier.heightIn(max = 360.dp),
-        ) { menu { open = false } }
+        // Anchored at the row's right end, under the value it changes, not over the time cards.
+        Box(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp)) {
+            DropdownMenu(
+                expanded = open,
+                onDismissRequest = { open = false },
+                modifier = Modifier.heightIn(max = 360.dp),
+            ) { menu { open = false } }
+        }
     }
 }
 
