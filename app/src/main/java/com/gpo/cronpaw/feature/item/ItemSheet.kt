@@ -144,17 +144,72 @@ fun ItemSheet(item: AgendaItem, onDismiss: () -> Unit) {
                 live.location?.let { Text(it, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodyMedium, color = heroInk.copy(alpha = 0.75f)) }
                 // Where it lives belongs to what it is, so it stays inside the block.
                 val origin = when (val src = live.source) {
-                    is Source.Calendar -> calendars.firstOrNull { it.id == src.calendarId }?.let { it.name to it.accountName }
-                    is Source.Notion -> db?.let { it.title to "Notion" }
+                    is Source.Calendar -> calendars.firstOrNull { it.id == src.calendarId }?.let { cal ->
+                        // The account only when two calendars share the name; otherwise it is noise (and an email).
+                        cal.name to (if (calendars.count { it.name == cal.name } > 1) cal.accountName else "")
+                    }
+                    is Source.Notion -> db?.let { it.title to "" }
                 }
                 origin?.let { (name, account) ->
                     Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(8.dp).clip(CircleShape).background(heroInk.copy(alpha = 0.6f)))
                         Spacer(Modifier.width(8.dp))
                         Text(name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = heroInk)
-                        Spacer(Modifier.width(6.dp))
-                        Text(account, style = MaterialTheme.typography.labelMedium, color = heroInk.copy(alpha = 0.7f), maxLines = 1)
+                        if (account.isNotEmpty()) {
+                            Spacer(Modifier.width(6.dp))
+                            Text(account, style = MaterialTheme.typography.labelMedium, color = heroInk.copy(alpha = 0.7f), maxLines = 1)
+                        }
                     }
+                }
+            }
+            // What you do with it, right under it: one row of pills in one colour family,
+            // ⋯ and delete at the end (delete asks twice).
+            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                val pinned = live.key in pins
+                PillAction(if (pinned) CronSymbols.PinFilled else CronSymbols.Pin, if (pinned) "已置顶" else "置顶", on = pinned) {
+                    haptics.tick(); Pins.toggle(live.key)
+                }
+                val cal = live.source as? Source.Calendar
+                if (notion != null && notion.url.isNotEmpty()) {
+                    PillAction(YoinSymbols.Launch, "在 Notion 打开", on = false) {
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(notion.url))) }
+                    }
+                } else if (cal != null && cal.eventId > 0) {
+                    PillAction(YoinSymbols.Launch, "在日历打开", on = false) {
+                        runCatching {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, cal.eventId))
+                                    .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, live.start)
+                                    .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, live.end),
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                if (db != null) {
+                    IconButton(onClick = { haptics.tick(); showAll = !showAll }) {
+                        Icon(YoinSymbols.MoreHorizontal, "显示哪些属性", tint = if (showAll) cs.primary else cs.onSurfaceVariant)
+                    }
+                }
+                val delBg by androidx.compose.animation.animateColorAsState(
+                    if (confirmDelete) cs.error else Color.Transparent, com.gpo.cronpaw.ui.theme.YoinMotion.defaultEffectsSpec(), label = "del",
+                )
+                Box(
+                    Modifier.size(44.dp).clip(CircleShape).background(delBg).clickable {
+                        if (!confirmDelete) { haptics.tick(); confirmDelete = true; return@clickable }
+                        haptics.lowTick()
+                        scope.launch {
+                            if (Actions.delete(context, live)) {
+                                // Slide away first, so it doesn't just blink out.
+                                runCatching { sheet.hide() }
+                                toast("已删除")
+                                onDismiss()
+                            } else toast("删不掉")
+                        }
+                    },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(YoinSymbols.Delete, if (confirmDelete) "再点一次删除" else "删除", tint = if (confirmDelete) cs.onError else cs.onSurfaceVariant)
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -230,68 +285,6 @@ fun ItemSheet(item: AgendaItem, onDismiss: () -> Unit) {
                 }
             }
 
-
-            // Then what you do with it, after a clear gap: pin and open together.
-            Spacer(Modifier.height(24.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                val pinned = live.key in pins
-                RoundAction(
-                    if (pinned) CronSymbols.PinFilled else CronSymbols.Pin,
-                    if (pinned) "已置顶" else "置顶",
-                    if (pinned) cs.primary else cs.primaryContainer,
-                    if (pinned) cs.onPrimary else cs.onPrimaryContainer,
-                ) { haptics.tick(); Pins.toggle(live.key) }
-                if (notion != null && notion.url.isNotEmpty()) {
-                    RoundAction(CronSymbols.Database, "在 Notion 打开", cs.secondaryContainer, cs.onSecondaryContainer) {
-                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(notion.url))) }
-                    }
-                }
-                val cal = live.source as? Source.Calendar
-                if (cal != null && cal.eventId > 0) {
-                    RoundAction(CronSymbols.Calendar, "在日历打开", cs.secondaryContainer, cs.onSecondaryContainer) {
-                        runCatching {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, cal.eventId))
-                                    .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, live.start)
-                                    .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, live.end),
-                            )
-                        }
-                    }
-                }
-                Spacer(Modifier.weight(1f))
-                // Which properties show is a setting, used rarely: a plain ⋯ at the end.
-                if (db != null) {
-                    IconButton(onClick = { haptics.tick(); showAll = !showAll }, modifier = Modifier.padding(top = 6.dp)) {
-                        Icon(YoinSymbols.MoreHorizontal, "显示哪些属性", tint = if (showAll) cs.primary else cs.onSurfaceVariant)
-                    }
-                }
-            }
-
-            // Delete on its own at the bottom, quiet until asked twice.
-            Spacer(Modifier.height(24.dp))
-            Text(
-                if (confirmDelete) "再点一次删除" else "删除",
-                Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .clip(CircleShape)
-                    .background(if (confirmDelete) cs.errorContainer else Color.Transparent)
-                    .clickable {
-                        if (!confirmDelete) { haptics.tick(); confirmDelete = true; return@clickable }
-                        haptics.lowTick()
-                        scope.launch {
-                            if (Actions.delete(context, live)) {
-                                // Slide away first, so it doesn't just blink out.
-                                runCatching { sheet.hide() }
-                                toast("已删除")
-                                onDismiss()
-                            } else toast("删不掉")
-                        }
-                    }
-                    .padding(horizontal = 20.dp, vertical = 10.dp),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = if (confirmDelete) cs.onErrorContainer else cs.error,
-            )
         }
     }
 }
@@ -315,14 +308,16 @@ private fun Label(text: String) {
 }
 
 @Composable
-private fun RoundAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, bg: Color, ink: Color, onClick: () -> Unit) {
-    val fill by androidx.compose.animation.animateColorAsState(bg, com.gpo.cronpaw.ui.theme.YoinMotion.defaultEffectsSpec(), label = "action")
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(80.dp)) {
-        Box(
-            Modifier.size(52.dp).clip(CircleShape).background(fill).clickable(onClick = onClick),
-            contentAlignment = Alignment.Center,
-        ) { Icon(icon, null, Modifier.size(24.dp), tint = ink) }
-        Spacer(Modifier.height(6.dp))
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+private fun PillAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, on: Boolean, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        Modifier.height(44.dp).clip(CircleShape).background(if (on) cs.primary else cs.secondaryContainer).clickable(onClick = onClick)
+            .padding(start = 14.dp, end = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val ink = if (on) cs.onPrimary else cs.onSecondaryContainer
+        Icon(icon, null, Modifier.size(18.dp), tint = ink)
+        Spacer(Modifier.width(6.dp))
+        Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = ink, maxLines = 1)
     }
 }

@@ -79,7 +79,38 @@ private fun EventFields(target: Target.Calendar, start: Long, event: CalendarRep
     var colors by remember(target.info.id) { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
     LaunchedEffect(target.info.id) { colors = CalendarRepo.eventColors(context, target.info.id) }
 
-    Column(Modifier.fillMaxWidth().padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    // Used now and then, so folded into one row that says what's set; tap to open.
+    var open by remember { mutableStateOf(false) }
+    val dow = Instant.ofEpochMilli(start).atZone(ZoneId.systemDefault()).dayOfWeek
+    val summary = listOfNotNull(
+        event.location.ifBlank { null },
+        if (event.notes.isNotBlank()) "有备注" else null,
+        event.reminders.takeIf { it.isNotEmpty() }?.let { r -> "提醒 " + r.joinToString("、") { reminderLabel(it) } },
+        event.rrule?.let { repeatLabel(it, dow) },
+        if (event.colorKey != null) "自选颜色" else null,
+    ).joinToString(" · ")
+    val cs = MaterialTheme.colorScheme
+    Row(
+        Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(16.dp)).background(cs.surfaceContainer)
+            .clickable { haptics.tick(); open = !open }.padding(start = 16.dp, end = 10.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            summary.ifBlank { "地点 · 备注 · 提醒 · 重复 · 颜色" },
+            Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (summary.isBlank()) cs.onSurfaceVariant else cs.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Icon(if (open) YoinSymbols.ChevronUp else YoinSymbols.ChevronDown, if (open) "收起" else "展开", tint = cs.onSurfaceVariant)
+    }
+    androidx.compose.animation.AnimatedVisibility(
+        open,
+        enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+        exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
+    ) {
+    Column(Modifier.fillMaxWidth().padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         // Place and notes side by side would be cramped: place is one line, notes can grow.
         PlainField(event.location, { onEvent(event.copy(location = it)) }, "地点", singleLine = true)
         PlainField(event.notes, { onEvent(event.copy(notes = it)) }, "备注", singleLine = false)
@@ -97,7 +128,6 @@ private fun EventFields(target: Target.Calendar, start: Long, event: CalendarRep
                 }
             }
             ChipRow("重复") {
-                val dow = Instant.ofEpochMilli(start).atZone(ZoneId.systemDefault()).dayOfWeek
                 val options = listOf(
                     null to "不重复",
                     "FREQ=DAILY" to "每天",
@@ -120,6 +150,23 @@ private fun EventFields(target: Target.Calendar, start: Long, event: CalendarRep
             }
         }
     }
+}
+}
+
+private fun reminderLabel(m: Int) = when {
+    m == 0 -> "准时"
+    m % 1440 == 0 -> "${m / 1440}天"
+    m % 60 == 0 -> "${m / 60}小时"
+    else -> "${m}分钟"
+}
+
+private fun repeatLabel(rule: String, dow: DayOfWeek) = when {
+    rule == "FREQ=DAILY" -> "每天"
+    rule.endsWith("MO,TU,WE,TH,FR") -> "工作日"
+    rule.startsWith("FREQ=WEEKLY") -> "每${weekdayName(dow)}"
+    rule == "FREQ=MONTHLY" -> "每月"
+    rule == "FREQ=YEARLY" -> "每年"
+    else -> "重复"
 }
 
 private fun byDay(d: DayOfWeek) = listOf("MO", "TU", "WE", "TH", "FR", "SA", "SU")[d.value - 1]

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -100,10 +101,10 @@ fun SettingsScreen(nav: Nav) {
                     .fillMaxWidth()
                     .padding(top = 4.dp)
                     .clip(RoundedCornerShape(32.dp))
-                    .background(if (connected) cs.primaryContainer else cs.tertiaryContainer)
+                    .background(cs.primaryContainer)
                     .padding(start = 22.dp, end = 16.dp, top = 20.dp, bottom = 20.dp),
             ) {
-                val ink = if (connected) cs.onPrimaryContainer else cs.onTertiaryContainer
+                val ink = cs.onPrimaryContainer
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(CronSymbols.Database, null, Modifier.size(18.dp), tint = ink.copy(alpha = 0.7f))
                     Spacer(Modifier.width(6.dp))
@@ -134,12 +135,12 @@ fun SettingsScreen(nav: Nav) {
                         .padding(horizontal = 18.dp, vertical = 10.dp),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
-                    color = if (connected) ink else cs.tertiaryContainer,
+                    color = if (connected) ink else cs.primaryContainer,
                 )
             }
 
-            // Its databases right under it, as tiles, with + at the end.
-            Row(
+            // Its databases right under it, as tiles, with + at the end — only once connected.
+            if (connected) Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
@@ -166,8 +167,8 @@ fun SettingsScreen(nav: Nav) {
                         haptics.tick(); AppSettings.set(AppSettings.defaultMinutes, it)
                     }
                 }
-                ListRow(YoinSymbols.Send, "自动加入", "确认页不碰屏幕，倒计时后加入 · 秒") {
-                    InlineChoices(listOf(0 to "不", 3 to "3", 4 to "4", 6 to "6"), autoSave) {
+                ListRow(YoinSymbols.Send, "自动加入", "确认页不碰屏幕，倒计时后加入") {
+                    InlineChoices(listOf(0 to "关", 3 to "3秒", 4 to "4秒", 6 to "6秒"), autoSave) {
                         haptics.tick(); AppSettings.set(AppSettings.autoSaveSeconds, it)
                     }
                 }
@@ -210,9 +211,10 @@ fun SettingsScreen(nav: Nav) {
                     runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/p2o51/CronPaw"))) }
                 }) {
                     Text("GitHub", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    Chevron(false)
                 }
                 ListRow(YoinSymbols.Info, "版本") {
-                    Text(BuildConfig.VERSION_NAME, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    Text(BuildConfig.VERSION_NAME, Modifier.padding(end = 20.dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 }
             }
 
@@ -241,8 +243,9 @@ fun SettingsScreen(nav: Nav) {
 private fun GroupTitle(text: String) {
     Text(
         text,
-        Modifier.padding(start = 8.dp, top = 24.dp, bottom = 8.dp),
-        style = MaterialTheme.typography.labelLarge,
+        Modifier.padding(start = 20.dp, top = 32.dp, bottom = 8.dp),
+        style = MaterialTheme.typography.labelMedium,
+        letterSpacing = androidx.compose.ui.unit.TextUnit(1f, androidx.compose.ui.unit.TextUnitType.Sp),
         fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.primary,
     )
@@ -276,8 +279,9 @@ private fun ListRow(
     Row(
         Modifier
             .fillMaxWidth()
+            .heightIn(min = 60.dp)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(start = 18.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+            .padding(start = 18.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurface)
@@ -296,12 +300,13 @@ private fun ListRow(
 private fun <T> InlineChoices(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
     val cs = MaterialTheme.colorScheme
     Row(verticalAlignment = Alignment.CenterVertically) {
-        options.forEach { (v, label) ->
+        options.forEachIndexed { i, (v, label) ->
             val on = v == selected
             val ink by animateColorAsState(if (on) cs.primary else cs.onSurfaceVariant, YoinMotion.defaultEffectsSpec(), label = "choice")
             Text(
                 label,
-                Modifier.clip(RoundedCornerShape(10.dp)).clickable { onSelect(v) }.padding(horizontal = 7.dp, vertical = 8.dp),
+                Modifier.clip(RoundedCornerShape(10.dp)).clickable { onSelect(v) }
+                    .padding(start = 7.dp, end = if (i == options.lastIndex) 0.dp else 7.dp, top = 8.dp, bottom = 8.dp),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
                 color = ink,

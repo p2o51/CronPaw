@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -492,22 +493,42 @@ private fun ConfirmStage(
         }
     }
     Column(Modifier.fillMaxWidth()) {
-        TextField(
-            value = text,
-            onValueChange = onText,
-            modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
-            placeholder = { Text("明天下午三点 和小王吃饭 一小时") },
-            textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-            shape = RoundedCornerShape(18.dp),
-            colors = TextFieldDefaults.colors(
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-                focusedContainerColor = cs.surfaceContainer,
-                unfocusedContainerColor = cs.surfaceContainer,
-            ),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { onSave(false) }),
-        )
+        // Title, with 加入 right beside it so the keyboard never hides it.
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextField(
+                value = text,
+                onValueChange = onText,
+                modifier = Modifier.weight(1f).focusRequester(focusRequester),
+                placeholder = { Text("明天下午三点 和小王吃饭", maxLines = 1) },
+                textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                shape = RoundedCornerShape(18.dp),
+                colors = TextFieldDefaults.colors(
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    focusedContainerColor = cs.surfaceContainer,
+                    unfocusedContainerColor = cs.surfaceContainer,
+                ),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { onSave(false) }),
+            )
+            Box(
+                Modifier
+                    .size(width = 72.dp, height = 56.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(if (title.isNotBlank()) cs.primary else cs.surfaceContainerHighest)
+                    .clickable(enabled = !saving && !saved && title.isNotBlank()) { onSave(false) },
+                contentAlignment = Alignment.Center,
+            ) {
+                val ink = if (title.isNotBlank()) cs.onPrimary else cs.onSurfaceVariant
+                // The countdown fills the button from the left.
+                Box(Modifier.align(Alignment.CenterStart).fillMaxHeight().fillMaxWidth(progress.value).background(ink.copy(alpha = 0.2f)))
+                when {
+                    saved -> Icon(YoinSymbols.Check, null, Modifier.size(26.dp), tint = ink)
+                    saving -> CircularProgressIndicator(Modifier.size(22.dp), color = ink, strokeWidth = 3.dp)
+                    else -> Text(if (editing) "保存" else "加入", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = ink, maxLines = 1)
+                }
+            }
+        }
         // What the words were read as, piece by piece, as they are typed.
         val heardWhen = parsed.date != null || parsed.minute != null || parsed.minutes != null
         val pieces = listOfNotNull(
@@ -544,11 +565,11 @@ private fun ConfirmStage(
                 }
             }
         }
+
+        // ── When: the day with 全天 next to it, then start | end, then the length ──
         Spacer(Modifier.height(24.dp))
         val day = Times.date(start)
-        // The day as a pill with 全天 beside it, then when as two blocks of unequal weight:
-        // the start large, the length smaller and quieter.
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 Modifier.clip(CircleShape).background(cs.surfaceContainer),
                 verticalAlignment = Alignment.CenterVertically,
@@ -559,17 +580,16 @@ private fun ConfirmStage(
                 }
                 IconButton(onClick = { haptics.tick(); onStart(start + 86_400_000L) }) { Icon(YoinSymbols.ChevronRight, "后一天") }
             }
-            Spacer(Modifier.weight(1f))
             Text(
                 "全天",
                 Modifier
                     .clip(CircleShape)
-                    .background(if (allDay) cs.tertiary else cs.surfaceContainer)
+                    .background(if (allDay) cs.primary else cs.surfaceContainer)
                     .clickable { haptics.tick(); onAllDay(!allDay) }
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
-                color = if (allDay) cs.onTertiary else cs.onSurfaceVariant,
+                color = if (allDay) cs.onPrimary else cs.onSurfaceVariant,
             )
         }
         AnimatedVisibility(
@@ -578,153 +598,74 @@ private fun ConfirmStage(
             exit = fadeOut(YoinMotion.fastEffectsSpec()) + shrinkVertically(YoinMotion.fastSpatialSpec()),
         ) {
           Column {
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp).height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // One colour family: the start in the full block, the end a shade lighter. Tap either to pick a time.
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val end = start + minutes * 60_000L
+                TimeBlock("开始", Times.hm(start), null, cs.primaryContainer, cs.onPrimaryContainer, Modifier.weight(1f)) {
+                    haptics.tick(); picking = "start"
+                }
                 TimeBlock(
-                    label = "开始",
-                    value = Times.hm(start),
-                    unit = "到 ${Times.hm(start + minutes * 60_000L)}",
-                    big = true,
-                    bg = cs.primaryContainer,
-                    ink = cs.onPrimaryContainer,
-                    onMinus = { haptics.tick(); onStart(start - 15 * 60_000L) },
-                    onPlus = { haptics.tick(); onStart(start + 15 * 60_000L) },
-                    onValue = { haptics.tick(); picking = "start" },
-                    onUnit = { haptics.tick(); picking = "end" },
-                    modifier = Modifier.weight(1.5f).fillMaxHeight(),
-                )
-                val (dv, du) = Times.duration(minutes)
-                TimeBlock(
-                    label = "时长",
-                    value = dv,
-                    unit = du,
-                    big = false,
-                    bg = cs.secondaryContainer,
-                    ink = cs.onSecondaryContainer,
-                    onMinus = { haptics.tick(); onMinutes((minutes - 15).coerceAtLeast(5)) },
-                    onPlus = { haptics.tick(); onMinutes(minutes + 15) },
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                )
+                    "结束", Times.hm(end), "共 ${Times.durationText(minutes)}",
+                    cs.primaryContainer.copy(alpha = 0.45f), cs.onSurface, Modifier.weight(1f),
+                ) { haptics.tick(); picking = "end" }
             }
-            // The usual lengths one tap away; 「默认」 keeps the choice for the next tap on the timeline.
+            // The usual lengths, equal widths so all six fit on a phone.
             Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(16.dp)).background(cs.surfaceContainer).padding(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                val defaultMinutes = AppSettings.defaultMinutes.state.collectAsState().value
-                listOf(15, 30, 45, 60, 90, 120).forEach { m ->
+                listOf(15 to "15分", 30 to "30分", 45 to "45分", 60 to "1时", 90 to "1.5时", 120 to "2时").forEach { (m, label) ->
                     val on = m == minutes
-                    val (v, u) = Times.duration(m)
-                    Row(
-                        Modifier
-                            .clip(CircleShape)
-                            .background(if (on) cs.primary else cs.surfaceContainerHighest)
-                            .clickable { haptics.tick(); onMinutes(m) }
-                            .padding(horizontal = 12.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.Bottom,
+                    val bg by animateColorAsState(if (on) cs.primary else Color.Transparent, YoinMotion.defaultEffectsSpec(), label = "len")
+                    Box(
+                        Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).background(bg).clickable { haptics.tick(); onMinutes(m) },
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Text(v, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = if (on) cs.onPrimary else cs.onSurface)
-                        Text(u, Modifier.padding(start = 1.dp), style = MaterialTheme.typography.labelSmall, color = if (on) cs.onPrimary.copy(alpha = 0.7f) else cs.onSurfaceVariant)
+                        Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, color = if (on) cs.onPrimary else cs.onSurfaceVariant, maxLines = 1)
                     }
                 }
-                if (minutes != defaultMinutes) {
-                    Text(
-                        "设为默认",
-                        Modifier
-                            .clip(CircleShape)
-                            .clickable { haptics.tick(); AppSettings.set(AppSettings.defaultMinutes, minutes) }
-                            .padding(horizontal = 10.dp, vertical = 7.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = cs.primary,
-                    )
-                }
+            }
+            val defaultMinutes = AppSettings.defaultMinutes.state.collectAsState().value
+            if (minutes != defaultMinutes) {
+                Text(
+                    "把 ${Times.durationText(minutes)} 设为默认",
+                    Modifier
+                        .align(Alignment.End)
+                        .padding(top = 2.dp)
+                        .clip(CircleShape)
+                        .clickable { haptics.tick(); AppSettings.set(AppSettings.defaultMinutes, minutes) }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = cs.primary,
+                )
             }
           }
         }
-        // Groups: title, when, where; a clear gap between each, tight inside.
+
+        // ── Where it goes, and what that place asks for ──
         Spacer(Modifier.height(24.dp))
         more()
-        Spacer(Modifier.height(24.dp))
-        // Saved: the bar draws in to a round tick.
-        val shrink by animateFloatAsState(if (saved) 1f else 0f, YoinMotion.defaultSpatialSpec(), label = "saved")
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val full = maxWidth
-        Box(
-            Modifier
-                .align(Alignment.Center)
-                .width(full - (full - 56.dp) * shrink)
-                .height(56.dp)
-                .clip(CircleShape)
-                .background(cs.primary)
-                .clickable(enabled = !saving && title.isNotBlank()) { onSave(false) },
-            contentAlignment = Alignment.Center,
-        ) {
-            // The countdown fills the button from the left.
-            Box(Modifier.align(Alignment.CenterStart).fillMaxHeight().fillMaxWidth(progress.value).background(cs.onPrimary.copy(alpha = 0.18f)))
-            when {
-                saved -> Icon(YoinSymbols.Check, null, Modifier.size(28.dp), tint = cs.onPrimary)
-                saving -> CircularProgressIndicator(Modifier.size(24.dp), color = cs.onPrimary, strokeWidth = 3.dp)
-                else -> Text(if (editing) "保存" else "加入", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = cs.onPrimary, maxLines = 1)
-            }
-        }
-        }
     }
 }
 
-/** A colour block for one part of when: label on top, a bold value and a quiet unit, ‹ › below. */
+/** One end of the time: a label, the time large, an optional quiet note. The whole block opens the picker. */
 @Composable
-private fun TimeBlock(
-    label: String,
-    value: String,
-    unit: String,
-    big: Boolean,
-    bg: Color,
-    ink: Color,
-    onMinus: () -> Unit,
-    onPlus: () -> Unit,
-    onValue: (() -> Unit)? = null,
-    onUnit: (() -> Unit)? = null,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier.clip(RoundedCornerShape(if (big) 28.dp else 22.dp)).background(bg).padding(start = 16.dp, top = 12.dp, end = 4.dp, bottom = 4.dp)) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = ink.copy(alpha = 0.7f))
-        Row(verticalAlignment = Alignment.Bottom) {
-            AnimatedContent(
-                value,
-                Modifier.clip(RoundedCornerShape(12.dp)).then(if (onValue != null) Modifier.clickable(onClick = onValue) else Modifier),
-                transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "value",
-            ) { v ->
-                Text(
-                    v,
-                    style = if (big) MaterialTheme.typography.displaySmall else MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = ink,
-                )
+private fun TimeBlock(label: String, value: String, note: String?, bg: Color, ink: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Column(
+        modifier.clip(RoundedCornerShape(22.dp)).background(bg).clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MaterialTheme.typography.labelMedium, color = ink.copy(alpha = 0.7f))
+            if (note != null) {
+                Spacer(Modifier.width(6.dp))
+                Text(note, style = MaterialTheme.typography.labelMedium, color = ink.copy(alpha = 0.7f), maxLines = 1)
             }
-            // A tappable unit (the end time) reads as a small pill.
-            Text(
-                unit,
-                Modifier
-                    .padding(start = 4.dp, bottom = if (big) 6.dp else 5.dp)
-                    .then(
-                        if (onUnit != null) Modifier.clip(CircleShape).background(ink.copy(alpha = 0.12f)).clickable(onClick = onUnit).padding(horizontal = 8.dp, vertical = 3.dp)
-                        else Modifier,
-                    ),
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = if (onUnit != null) FontWeight.Bold else FontWeight.Normal,
-                color = ink.copy(alpha = if (onUnit != null) 0.9f else 0.7f),
-                maxLines = 1,
-            )
         }
-        Spacer(Modifier.weight(1f))
-        Row(Modifier.align(Alignment.End)) {
-            IconButton(onClick = onMinus) { Icon(YoinSymbols.ChevronLeft, "减", tint = ink) }
-            IconButton(onClick = onPlus) { Icon(YoinSymbols.ChevronRight, "加", tint = ink) }
+        AnimatedContent(value, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "value") { v ->
+            Text(v, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = ink)
         }
     }
 }
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
