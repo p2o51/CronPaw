@@ -146,12 +146,15 @@ fun HomeScreen(nav: Nav) {
         if (shown == viewDays) { viewIn.animateTo(1f); return@LaunchedEffect }
         try {
             viewIn.animateTo(0f, spring(stiffness = Spring.StiffnessHigh))
-            when {
-                viewDays > 0 -> { if (tl.days != viewDays) tl.switchDays(viewDays) }
-                viewDays == AppSettings.ViewMonth -> monthPager.scrollToPage(monthPage(YearMonth.from(if (shown > 0) tl.first else LocalDate.now())))
-                viewDays == AppSettings.ViewSchedule -> scheduleList.scrollToItem(scheduleIndexOf(scheduleRows, if (shown > 0) tl.first else LocalDate.now()))
-            }
+            // The month pager and the schedule list only exist once they are shown, and scrolling
+            // either waits for its first layout: switch first, then scroll, or it waits forever.
+            val from = if (shown > 0) tl.first else LocalDate.now()
+            if (viewDays > 0 && tl.days != viewDays) tl.switchDays(viewDays)
             shown = viewDays
+            when (viewDays) {
+                AppSettings.ViewMonth -> monthPager.scrollToPage(monthPage(YearMonth.from(from)))
+                AppSettings.ViewSchedule -> scheduleList.scrollToItem(scheduleIndexOf(scheduleRows, from))
+            }
             viewIn.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow))
         } finally {
             if (viewIn.value < 1f) withContext(NonCancellable) { viewIn.snapTo(1f) }
