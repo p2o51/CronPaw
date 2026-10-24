@@ -120,10 +120,12 @@ class AgendaGlance : GlanceAppWidget() {
                     Text("明天", style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium, color = GlanceTheme.colors.onSurfaceVariant))
                     Spacer(GlanceModifier.height(8.dp))
                 }
+                // Bars need no circle's width: without todos the titles get those 14dp back.
+                val markWidth = if (list.take(rows).any { it.todo }) 18.dp else 4.dp
                 // Spacing as padding, not spacers: a Glance column takes ten children at most.
                 Column(GlanceModifier.fillMaxWidth()) {
                     list.take(rows.coerceAtMost(9)).forEachIndexed { i, item ->
-                        ItemRow(context, item, if (narrow) 2 else 1, if (i > 0) 12.dp else 0.dp)
+                        ItemRow(context, item, if (narrow) 2 else 1, if (i > 0) 12.dp else 0.dp, markWidth)
                     }
                 }
             }
@@ -131,13 +133,13 @@ class AgendaGlance : GlanceAppWidget() {
     }
 
     @Composable
-    private fun ItemRow(context: Context, item: AgendaItem, titleLines: Int, top: Dp) {
+    private fun ItemRow(context: Context, item: AgendaItem, titleLines: Int, top: Dp, markWidth: Dp) {
         Row(
             GlanceModifier.fillMaxWidth().padding(top = top).clickable(openAt(context, Times.date(item.start), item)),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // The mark sits in an 18dp column so circles and bars line their titles up.
-            Box(GlanceModifier.width(18.dp), contentAlignment = Alignment.Center) {
+            // The mark sits in one column so circles and bars line their titles up.
+            Box(GlanceModifier.width(markWidth), contentAlignment = Alignment.Center) {
                 if (item.todo) TodoCircle(item) else ColorBar(item, 32.dp)
             }
             Spacer(GlanceModifier.width(10.dp))

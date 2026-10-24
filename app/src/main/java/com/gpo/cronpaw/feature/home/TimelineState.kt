@@ -100,6 +100,9 @@ class TimelineState(
         base = (if (n == 7) Times.monday(keep) else keep).minusDays(((pager.currentPage - PageMid) * n).toLong())
     }
 
+    /** Where the timeline should open when it is not laid out yet (a widget opening an item). */
+    var wantMinute: Int? = null
+
     suspend fun scrollToMinute(minute: Int) {
         scroll.scrollTo(((minute / 60f) * hourPx).toInt().coerceAtLeast(0))
     }

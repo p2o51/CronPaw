@@ -129,7 +129,10 @@ fun Timeline(
             state.header.scrollToPage(p, f)
         }
     }
-    LaunchedEffect(Unit) { state.scrollToMinute(Times.minuteOfDay(now.longValue) - 90) }
+    LaunchedEffect(Unit) {
+        state.scrollToMinute(state.wantMinute ?: (Times.minuteOfDay(now.longValue) - 90))
+        state.wantMinute = null
+    }
 
     val byDay = remember(items) { items.groupByDays() }
 

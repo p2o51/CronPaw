@@ -203,7 +203,12 @@ fun HomeScreen(nav: Nav) {
                 else -> tl.show(j.date)
             }
             j.open?.let { item ->
-                if (shown > 0 && !item.allDay) tl.scrollToMinute(Times.minuteOfDay(item.start) - 60)
+                if (shown > 0 && !item.allDay) {
+                    val minute = Times.minuteOfDay(item.start) - 60
+                    tl.scrollToMinute(minute)
+                    // Not laid out yet (opened from a widget): the timeline takes it when it is.
+                    tl.wantMinute = if (tl.scroll.maxValue == 0) minute else null
+                }
                 selected = item
             }
         }
