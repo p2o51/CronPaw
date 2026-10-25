@@ -151,6 +151,10 @@ fun FocusScreen(nav: Nav) {
     // until the real tomato underneath has taken over.
     var breathing by remember { mutableStateOf<FocusController.Plan?>(null) }
     var gathering by remember { mutableStateOf(false) }
+    // The focus page's first composition holds a frame for 100 ms or more: it happens during the
+    // 屏住 on a session that isn't saved yet, hidden under the breath, and the real one replaces it.
+    var warm by remember { mutableStateOf<FocusSession?>(null) }
+    LaunchedEffect(session != null) { if (session != null) warm = null }
     val origin = remember { FocusHandoff.take() }
     val tomatoAt = remember { mutableStateOf<Rect?>(null) }
     val plan = pending
@@ -165,12 +169,19 @@ fun FocusScreen(nav: Nav) {
     KeepScreenOnBlackBars()
     BackHandler(enabled = pending != null && !gathering) {
         breathing = null
+        warm = null
         FocusController.cancelPlan()
     }
 
     Box(Modifier.fillMaxSize()) {
-        val s = session
-        if (s != null) FocusPage(s, afterBreath = breathing != null, tomatoAt = tomatoAt, onLeave = { leaving = true; nav.pop() })
+        val s = session ?: warm
+        if (s != null) FocusPage(
+            s,
+            afterBreath = breathing != null,
+            revealed = session != null && (gathering || breathing == null),
+            tomatoAt = tomatoAt,
+            onLeave = { leaving = true; nav.pop() },
+        )
         val b = breathing
         if (b != null) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -190,6 +201,7 @@ fun FocusScreen(nav: Nav) {
                         if (FocusController.pending.value == b) FocusController.start(context, b)
                     },
                     onDone = { breathing = null },
+                    onHold = { if (FocusStore.value == null && FocusController.pending.value == b) warm = FocusController.preview(context, b) },
                 )
             }
         } else if (plan != null && (!breathOn || !motionOn)) {
@@ -232,14 +244,14 @@ private fun KeepScreenOnBlackBars() {
 }
 
 @Composable
-private fun FocusPage(s0: FocusSession, afterBreath: Boolean, tomatoAt: MutableState<Rect?>, onLeave: () -> Unit) {
+private fun FocusPage(s0: FocusSession, afterBreath: Boolean, revealed: Boolean, tomatoAt: MutableState<Rect?>, onLeave: () -> Unit) {
     val context = LocalContext.current
     val view = LocalView.current
     // After the breath the tomato is the 气 that just landed; the rest settles in around it.
     val intro = remember { Animatable(if (afterBreath) 0f else 1f) }
     val tomatoIn = remember { Animatable(if (afterBreath) 0f else 1f) }
-    LaunchedEffect(Unit) {
-        if (intro.value >= 1f) return@LaunchedEffect
+    LaunchedEffect(revealed) {
+        if (!revealed || intro.value >= 1f) return@LaunchedEffect
         launch { delay(300); tomatoIn.animateTo(1f, spring(dampingRatio = 1f, stiffness = 380f)) }
         delay(120)
         intro.animateTo(1f, spring(dampingRatio = 1f, stiffness = 110f))

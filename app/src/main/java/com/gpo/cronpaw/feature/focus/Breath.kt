@@ -97,7 +97,7 @@ internal fun animationsOn(context: Context): Boolean =
  * and at the end it draws together into the tomato's body: [onGather] starts the clock so the
  * focus page is already underneath, [tomato] says where its tomato box landed (screen px, null
  * until laid out, then [fallback] in local px), and [onDone] comes once the real tomato shows.
- * A tap skips to the gather.
+ * [onHold] comes once, early in 屏住, while the seam stands still. A tap skips to the gather.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -109,6 +109,7 @@ fun BreathOverlay(
     onGather: () -> Unit,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
+    onHold: () -> Unit = {},
 ) {
     val density = LocalDensity.current
     val view = LocalView.current
@@ -117,6 +118,7 @@ fun BreathOverlay(
     val measurer = rememberTextMeasurer()
     val latestGather by rememberUpdatedState(onGather)
     val latestDone by rememberUpdatedState(onDone)
+    val latestHold by rememberUpdatedState(onHold)
     val latestTomato by rememberUpdatedState(tomato)
     val wordStyle = TextStyle(fontSize = 28.sp, fontWeight = FontWeight.Medium, letterSpacing = .18.em)
     val inhaleText = remember { measurer.measure("吸气", wordStyle) }
@@ -153,6 +155,7 @@ fun BreathOverlay(
             val gather = TargetBasedAnimation(spring(dampingRatio = 0.72f, stiffness = 240f), Float.VectorConverter, 0f, 1f)
             val start = withFrameNanos { it }
             var gathering = false
+            var held = false
             var e = 0f
             var last = 0f
             while (true) {
@@ -177,6 +180,7 @@ fun BreathOverlay(
                     state.breathe(g, t, spread.value(t), inhale.value(t - Spread), exhale.value(t - HoldEnd), latestLocal, tones.deep)
                     frame++
                     FocusHandoff.drawn.value = true
+                    if (!held && t >= InhaleEnd + 100f) { held = true; latestHold() }
                 }
             }
             latestDone()

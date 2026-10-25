@@ -51,12 +51,21 @@ object FocusController {
 
     /** The clock starts now (after the breath, or straight away). */
     fun start(context: Context, plan: Plan, now: Long = System.currentTimeMillis()) {
+        val s = preview(context, plan, now)
+        _recovery.value = null
+        commit(context, s)
+        // After the commit: the focus page never sees neither a plan nor a session and closes.
+        _pending.value = null
+    }
+
+    /** The session [start] would make at [now], not saved: the focus page warms up on it. */
+    fun preview(context: Context, plan: Plan, now: Long = System.currentTimeMillis()): FocusSession {
         val item = plan.item
         val focus = FocusSettings.focusMin.value
         val brk = FocusSettings.breakMin.value
         val minutes = FocusSession.minutesFor(item, now, focus)
         val (rounds, last) = FocusSession.plan(minutes, focus, brk)
-        val s = FocusSession(
+        return FocusSession(
             itemKey = item.key,
             title = item.title,
             color = item.color,
@@ -76,10 +85,6 @@ object FocusController {
             quiet = plan.quiet,
             bootCount = bootCount(context),
         )
-        _recovery.value = null
-        commit(context, s)
-        // After the commit: the focus page never sees neither a plan nor a session and closes.
-        _pending.value = null
     }
 
     fun pause(context: Context) = update(context) { s, now -> s.pause(now) }
