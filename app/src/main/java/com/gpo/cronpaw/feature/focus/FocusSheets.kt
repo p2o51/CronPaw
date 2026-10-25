@@ -261,7 +261,7 @@ fun RecoverySheet(s: FocusSession, onOpenFocus: () -> Unit, onDismiss: () -> Uni
                 Text(Times.hm(end), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = cs.primary)
                 Text("结束", Modifier.padding(start = 4.dp, bottom = 4.dp), style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
                 Spacer(Modifier.weight(1f))
-                Text("$minutes 分钟", Modifier.padding(bottom = 4.dp), style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+                Text(if (minutes < 1) "<1 分钟" else "$minutes 分钟", Modifier.padding(bottom = 4.dp), style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
             }
             Spacer(Modifier.height(16.dp))
             Label("结束在")

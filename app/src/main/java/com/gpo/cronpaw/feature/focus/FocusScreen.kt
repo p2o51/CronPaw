@@ -804,7 +804,7 @@ private fun EndPage(s: FocusSession, endAt: Long, tones: FocusTones, onLeave: ()
             leaving = true
             haptics.lowTick()
             onLeave()
-            FocusController.discard(context)
+            FocusController.discard(context, endAt = endAt)
         }
     }
     BoxWithConstraints(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {

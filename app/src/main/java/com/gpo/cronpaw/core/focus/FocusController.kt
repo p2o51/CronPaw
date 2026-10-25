@@ -160,13 +160,14 @@ object FocusController {
     }
 
     /** 放弃: nothing is written to the item, but the session still goes into [FocusLog]. */
-    fun discard(context: Context, recovered: Boolean = false) {
+    fun discard(context: Context, recovered: Boolean = false, endAt: Long? = null) {
         val s = FocusStore.value
         val now = System.currentTimeMillis()
         clear(context)
         if (s != null) {
-            val cur = advance(s, now)
-            FocusLog.add(context, cur, cur.actualEnd(now), "discarded", markedDone = false, recovered = recovered)
+            // The end the page showed (when 结束 was held), not when 放弃 was tapped.
+            val end = endAt ?: advance(s, now).actualEnd(now)
+            FocusLog.add(context, advance(s, end), end, "discarded", markedDone = false, recovered = recovered)
         }
     }
 
