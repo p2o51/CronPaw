@@ -294,6 +294,7 @@ private fun FocusPage(s0: FocusSession, onLeave: () -> Unit) {
                     BoxWithConstraints(Modifier.fillMaxSize().offset { shift }) {
                         val wide = maxWidth > maxHeight && (maxWidth >= 600.dp || maxHeight < 480.dp)
                         val geo = tomatoGeometry(maxWidth.value, maxHeight.value)
+                        val deskClock = minOf(maxWidth.value * 0.13f, maxHeight.value * 0.26f, 220f).coerceAtLeast(84f).sp
                         val pill: @Composable (Modifier) -> Unit = { m ->
                             NextPill(today.next, now, chrome, m.onGloballyPositioned { pillRect.value = it.boundsInRoot() }) { todayOpen = true }
                         }
@@ -316,7 +317,7 @@ private fun FocusPage(s0: FocusSession, onLeave: () -> Unit) {
                                     pill(Modifier)
                                     Spacer(Modifier.height(24.dp))
                                     // The desk clock: as large as the right half allows.
-                                    Clock(s, now, minOf(maxWidth.value * 0.13f, maxHeight.value * 0.26f, 220f).coerceAtLeast(84f).sp)
+                                    Clock(s, now, deskClock)
                                     Title(s, focusTones, chrome)
                                     Spacer(Modifier.height(16.dp))
                                     Harvest(s, now, focusTones, Arrangement.Start)
