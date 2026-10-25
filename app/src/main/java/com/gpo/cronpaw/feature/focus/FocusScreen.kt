@@ -240,8 +240,8 @@ private fun FocusPage(s0: FocusSession, afterBreath: Boolean, tomatoAt: MutableS
     val tomatoIn = remember { Animatable(if (afterBreath) 0f else 1f) }
     LaunchedEffect(Unit) {
         if (intro.value >= 1f) return@LaunchedEffect
-        launch { delay(420); tomatoIn.animateTo(1f, spring(dampingRatio = 1f, stiffness = 380f)) }
-        delay(260)
+        launch { delay(300); tomatoIn.animateTo(1f, spring(dampingRatio = 1f, stiffness = 380f)) }
+        delay(120)
         intro.animateTo(1f, spring(dampingRatio = 1f, stiffness = 110f))
     }
     val fade = Modifier.graphicsLayer { alpha = intro.value }

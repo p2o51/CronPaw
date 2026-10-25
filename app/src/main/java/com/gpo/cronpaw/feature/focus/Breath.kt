@@ -152,16 +152,23 @@ fun BreathOverlay(
             val exhale = TargetBasedAnimation(tween(3400, easing = CubicBezierEasing(.45f, 0f, .4f, 1f)), Float.VectorConverter, 0f, 1f)
             val gather = TargetBasedAnimation(spring(dampingRatio = 0.72f, stiffness = 240f), Float.VectorConverter, 0f, 1f)
             val start = withFrameNanos { it }
-            var gatheredAt = -1f
+            var gathering = false
+            var e = 0f
+            var last = 0f
             while (true) {
                 val t = (withFrameNanos { it } - start) / 1_000_000f
-                if (gatheredAt < 0f && (state.skip || t >= ExhaleEnd)) {
-                    gatheredAt = t
+                if (!gathering && (state.skip || t >= ExhaleEnd)) {
+                    gathering = true
+                    last = t
                     state.snap()
                     latestGather()
                 }
-                if (gatheredAt >= 0f) {
-                    val e = t - gatheredAt
+                if (gathering) {
+                    // The focus page composes on the gather's first frames and can hold one for
+                    // 100 ms or more; step at most a frame and a half, so the 气 travels rather
+                    // than jumping to the tomato.
+                    e += (t - last).coerceAtMost(25f)
+                    last = t
                     val box = latestTomato()?.translate(-here) ?: fallback
                     state.gather(g, gather.value(e), e, box)
                     frame++
@@ -393,7 +400,7 @@ private class BreathState {
         ghostAlpha = 0f
         pageAlpha = 1f - clamp01(e / 300f)
         bodyAlpha = clamp01((clamp01(v) - .62f) / .3f)
-        breathAlpha = 1f - clamp01((e - 520f) / 360f)
+        breathAlpha = 1f - clamp01((e - 440f) / 340f)
         shapeAlpha = 1f - clamp01(e / 250f)
         wordAlpha = minOf(wordAlpha, 1f - clamp01(e / 150f))
         hintAlpha = 0f
