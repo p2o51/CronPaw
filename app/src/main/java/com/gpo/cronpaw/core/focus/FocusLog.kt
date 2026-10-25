@@ -13,7 +13,7 @@ import java.io.File
 /**
  * Every ended session, kept on the phone only (one JSON line each in focus_log.jsonl), so a
  * time overview can be built later from real history. Nothing reads it yet; nothing leaves the
- * phone. Written however the session ended, including 不记 and sessions under a minute.
+ * phone. Written however the session ended, including 放弃 and sessions under a minute.
  */
 object FocusLog {
     private val io = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -32,7 +32,7 @@ object FocusLog {
         val roundsPlanned: Int,
         val roundsDone: Int,
         val pauses: Int,
-        /** saved: the item's time was rewritten; discarded: 不记; kept: ended without rewriting. */
+        /** saved: the item's time was rewritten; discarded: 放弃; kept: 完成 without a rewrite (under a minute or all-day). */
         val outcome: String,
         val markedDone: Boolean,
         /** Ended from 上次专注, after the app was gone. */
