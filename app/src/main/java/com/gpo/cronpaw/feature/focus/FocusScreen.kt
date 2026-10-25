@@ -832,7 +832,7 @@ private fun EndPage(s: FocusSession, endAt: Long, tones: FocusTones, onLeave: ()
                     // Was → becomes: what 完成 will write.
                     Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(if (s.itemStart > 0) "${Times.hm(s.itemStart)}–${Times.hm(s.itemEnd)}" else "未排期", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Dim)
-                        Text("→", Modifier.padding(horizontal = 10.dp), style = MaterialTheme.typography.titleMedium, color = Dimmer)
+                        Text("→", Modifier.padding(horizontal = 10.dp), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = Dim)
                         Text("${Times.hm(s.startedAt)}–${Times.hm(endAt)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = NearWhite)
                     }
                 }
