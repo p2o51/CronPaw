@@ -89,7 +89,8 @@ class NextGlance : GlanceAppWidget() {
                 GlanceModifier
                     .fillMaxSize()
                     .background(itemWash(item))
-                    .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 14.dp)
+                    // A one-cell-high widget is tight, more so with a larger font size: less padding there.
+                    .padding(start = 16.dp, end = 12.dp, top = if (short) 6.dp else 12.dp, bottom = if (short) 6.dp else 14.dp)
                     .clickable(openAt(context, Times.date(item.start), item)),
                 verticalAlignment = if (short) Alignment.CenterVertically else Alignment.Top,
             ) {
@@ -105,7 +106,7 @@ class NextGlance : GlanceAppWidget() {
                         TodoCircle(item, size = 20.dp, tint = itemWash(item))
                     }
                 }
-                Spacer(GlanceModifier.height(if (short) 2.dp else 6.dp))
+                Spacer(GlanceModifier.height(if (short) 0.dp else 6.dp))
                 Text(
                     item.title,
                     maxLines = if (short) 1 else 2,
