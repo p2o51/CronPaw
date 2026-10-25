@@ -150,14 +150,25 @@ object FocusController {
         clear(context)
         var ok = true
         val item = item(cur)
-        if (item != null && rewrite && !item.allDay && end - cur.startedAt >= 60_000L) {
-            ok = Actions.move(context, item, cur.startedAt, end, onlyThis = true)
-        }
-        if (item != null && markDone && item.todo) ok = Actions.setDone(item.copy(start = cur.startedAt, end = end), true) && ok
+        val rewrites = item != null && rewrite && !item.allDay && end - cur.startedAt >= 60_000L
+        if (rewrites) ok = Actions.move(context, item!!, cur.startedAt, end, onlyThis = true)
+        val done = item != null && markDone && item.todo
+        // The timeline keeps the item's own times unless they were just rewritten.
+        if (done) ok = Actions.setDone(if (rewrites) item!!.copy(start = cur.startedAt, end = end) else item!!, true) && ok
+        FocusLog.add(context, cur, end, if (rewrites) "saved" else "kept", done, recovered = endAt != null)
         return ok
     }
 
-    fun discard(context: Context) = clear(context)
+    /** 不记 (上次专注): nothing is written to the item, but the session still goes into [FocusLog]. */
+    fun discard(context: Context) {
+        val s = FocusStore.value
+        val now = System.currentTimeMillis()
+        clear(context)
+        if (s != null) {
+            val cur = advance(s, now)
+            FocusLog.add(context, cur, cur.actualEnd(now), "discarded", markedDone = false, recovered = true)
+        }
+    }
 
     private fun clear(context: Context) {
         FocusStore.save(null)
