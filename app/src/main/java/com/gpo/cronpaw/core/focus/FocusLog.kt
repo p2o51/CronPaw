@@ -9,9 +9,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import java.io.File
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 /**
  * Every ended session, kept on the phone only (one JSON line each in focus_log.jsonl), so a
@@ -41,22 +38,6 @@ object FocusLog {
         /** Ended from 上次专注, after the app was gone. */
         val recovered: Boolean,
     )
-
-    /**
-     * The line a Notion page gets, e.g. 「🍅 10月25日 16:02–16:47，专注 45 分钟，2 轮」. Steady
-     * wording, so it can be read back if the local log is ever lost.
-     */
-    fun line(s: FocusSession, endedAt: Long): String {
-        val zone = ZoneId.systemDefault()
-        val day = DateTimeFormatter.ofPattern("M月d日")
-        val hm = DateTimeFormatter.ofPattern("HH:mm")
-        val a = Instant.ofEpochMilli(s.startedAt).atZone(zone)
-        val b = Instant.ofEpochMilli(endedAt).atZone(zone)
-        val minutes = ((s.focused(endedAt).coerceAtMost(endedAt - s.startedAt) + 30_000L) / 60_000L).coerceAtLeast(1L)
-        val mark = if (s.mode == FocusMode.Pomodoro) "🍅" else "⏱"
-        val rounds = if (s.mode == FocusMode.Pomodoro) "，${s.harvested(endedAt)} 轮" else ""
-        return "$mark ${a.format(day)} ${a.format(hm)}–${b.format(hm)}，专注 $minutes 分钟$rounds"
-    }
 
     fun add(context: Context, s: FocusSession, endedAt: Long, outcome: String, markedDone: Boolean, recovered: Boolean) {
         val e = Entry(
