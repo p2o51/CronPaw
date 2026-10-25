@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -125,6 +126,16 @@ private val Body: Path = Path().apply {
         )
     }
     close()
+}
+
+/** The body outline and its bounds in the 226 box, for the breath to land on. */
+internal val TomatoBody: Path get() = Body
+internal val TomatoBodyBounds = Rect(16f, Top, 210f, Bottom)
+
+/** The 226 box a [Tomato] draws in, inside its [bounds]. */
+internal fun tomatoBox(bounds: Rect): Rect {
+    val side = minOf(bounds.width, bounds.height)
+    return Rect(Offset(bounds.center.x - side / 2f, bounds.center.y - side / 2f), Size(side, side))
 }
 
 private fun wavePath(level: Float, t: Float, amp: Float, freq: Float, off: Float, closed: Boolean): Path {

@@ -45,8 +45,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -66,8 +70,10 @@ import com.gpo.cronpaw.ui.components.rememberToast
 import com.gpo.cronpaw.ui.theme.YoinMotion
 import com.gpo.cronpaw.ui.theme.rememberRichHaptics
 import com.gpo.cronpaw.ui.time.Times
-import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * 「专注」 on an item: 番茄 or 自由 (remembered), whether to turn on 专注 mode, 开始. The
@@ -95,8 +101,20 @@ fun StartFocusSheet(item: AgendaItem, onStart: () -> Unit, onDismiss: () -> Unit
     val minutes = FocusSession.minutesFor(item, now, focusMin)
     val (rounds, last) = FocusSession.plan(minutes, focusMin, breakMin)
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = cs.surfaceContainerLow) {
-        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 24.dp).padding(bottom = 16.dp)) {
+    val density = LocalDensity.current
+    var buttonRect by remember { mutableStateOf<Rect?>(null) }
+    var sheetRect by remember { mutableStateOf<Rect?>(null) }
+    val buttonColor = cs.primary
+    val sheetColor = cs.surfaceContainerLow
+
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = sheetColor) {
+        // The sheet has its own window: measure against its view.
+        val view = LocalView.current
+        Column(Modifier.fillMaxWidth().onGloballyPositioned {
+            // The sheet's surface starts above this column, at the drag handle.
+            val r = it.screenRect(view)
+            sheetRect = r.copy(top = r.top - with(density) { 48.dp.toPx() })
+        }.navigationBarsPadding().padding(horizontal = 24.dp).padding(bottom = 16.dp)) {
             Text(item.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 2)
             Spacer(Modifier.height(20.dp))
             Label("方式")
@@ -172,13 +190,24 @@ fun StartFocusSheet(item: AgendaItem, onStart: () -> Unit, onDismiss: () -> Unit
                         notify.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }
                     FocusController.plan(item, mode, quiet && access)
-                    scope.launch {
-                        runCatching { sheet.hide() }
-                        onDismiss()
+                    if (FocusSettings.breath.value && animationsOn(context)) {
+                        // The button becomes the breath: the sheet stays until the breath has
+                        // drawn its copy of it underneath, then goes in the same frame.
+                        FocusHandoff.arm(buttonRect?.let { FocusHandoff.Origin(it, buttonColor, sheetRect, sheetColor) })
                         onStart()
+                        scope.launch {
+                            withTimeoutOrNull(600) { FocusHandoff.drawn.first { it } }
+                            onDismiss()
+                        }
+                    } else {
+                        onStart()
+                        scope.launch {
+                            runCatching { sheet.hide() }
+                            onDismiss()
+                        }
                     }
                 },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
+                modifier = Modifier.fillMaxWidth().height(56.dp).onGloballyPositioned { buttonRect = it.screenRect(view) },
                 shape = CircleShape,
             ) { Text("开始", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
         }

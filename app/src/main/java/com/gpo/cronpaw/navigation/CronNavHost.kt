@@ -2,6 +2,7 @@ package com.gpo.cronpaw.navigation
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -20,6 +21,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import com.gpo.cronpaw.core.focus.FocusController
+import com.gpo.cronpaw.core.focus.FocusSettings
 import com.gpo.cronpaw.core.focus.FocusStore
 import com.gpo.cronpaw.feature.focus.FocusScreen
 import com.gpo.cronpaw.feature.home.HomeScreen
@@ -61,8 +63,13 @@ fun CronNavHost() {
         AnimatedContent(
             targetState = stack.last(),
             transitionSpec = {
-                (fadeIn(YoinMotion.defaultEffectsSpec(motionRole, motionScheme)) + scaleIn(YoinMotion.defaultSpatialSpec(motionRole, motionScheme), initialScale = 0.96f)) togetherWith
-                    fadeOut(YoinMotion.fastEffectsSpec(motionRole, motionScheme))
+                // Starting with the breath: the breath is the transition, growing out of 开始.
+                if (targetState == "focus" && FocusController.pending.value != null && FocusSettings.breath.value) {
+                    EnterTransition.None togetherWith fadeOut(YoinMotion.fastEffectsSpec(motionRole, motionScheme))
+                } else {
+                    (fadeIn(YoinMotion.defaultEffectsSpec(motionRole, motionScheme)) + scaleIn(YoinMotion.defaultSpatialSpec(motionRole, motionScheme), initialScale = 0.96f)) togetherWith
+                        fadeOut(YoinMotion.fastEffectsSpec(motionRole, motionScheme))
+                }
             },
             label = "nav",
         ) { route ->

@@ -1,7 +1,6 @@
 package com.gpo.cronpaw.feature.focus
 
 import android.app.Activity
-import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -56,6 +55,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -84,8 +85,8 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
@@ -113,10 +114,10 @@ import com.gpo.cronpaw.ui.components.rememberToast
 import com.gpo.cronpaw.ui.theme.rememberRichHaptics
 import com.gpo.cronpaw.ui.time.Times
 import com.gpo.yoin.symbols.YoinSymbols
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.time.LocalDate
 import kotlin.math.max
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** The clock: Google Sans Flex at a thin weight, grey rather than white (it is on all the time). */
 @OptIn(ExperimentalTextApi::class)
@@ -145,36 +146,54 @@ fun FocusScreen(nav: Nav) {
     val pending by FocusController.pending.collectAsState()
     val breathOn by FocusSettings.breath.state.collectAsState()
     var leaving by remember { mutableStateOf(false) }
+    val motionOn = remember { animationsOn(context) }
+    // The breath outlives the plan: the clock starts as the 气 gathers, and the overlay stays
+    // until the real tomato underneath has taken over.
+    var breathing by remember { mutableStateOf<FocusController.Plan?>(null) }
+    var gathering by remember { mutableStateOf(false) }
+    val origin = remember { FocusHandoff.take() }
+    val tomatoAt = remember { mutableStateOf<Rect?>(null) }
+    val plan = pending
+    if (plan != null && breathing == null && breathOn && motionOn) {
+        SideEffect { breathing = plan }
+    }
 
     // Nothing to show (ended elsewhere, from the notification, or never started): back home.
-    LaunchedEffect(session == null, pending == null) {
-        if (session == null && pending == null && !leaving) { leaving = true; nav.pop() }
+    LaunchedEffect(session == null, pending == null, breathing == null) {
+        if (session == null && pending == null && breathing == null && !leaving) { leaving = true; nav.pop() }
     }
     KeepScreenOnBlackBars()
-    BackHandler(enabled = pending != null) { FocusController.cancelPlan() }
-
-    val plan = pending
-    val animationsOn = remember {
-        runCatching { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) }.getOrDefault(1f) > 0f
+    BackHandler(enabled = pending != null && !gathering) {
+        breathing = null
+        FocusController.cancelPlan()
     }
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+
+    Box(Modifier.fillMaxSize()) {
         val s = session
-        if (s != null) FocusPage(s, onLeave = { leaving = true; nav.pop() })
-        if (plan != null) {
-            if (!breathOn || !animationsOn) {
-                LaunchedEffect(plan) { FocusController.start(context, plan) }
-            } else {
-                BoxWithConstraints(Modifier.fillMaxSize()) {
-                    val density = LocalDensity.current
-                    val geo = remember(maxWidth, maxHeight) { tomatoGeometry(maxWidth.value, maxHeight.value) }
-                    BreathOverlay(
-                        tones = remember(plan) { FocusTones.of(plan.item.color) },
-                        tomatoCenter = with(density) { Offset(geo.cx.dp.toPx(), geo.cy.dp.toPx()) },
-                        tomatoSize = with(density) { geo.size.dp.toPx() * 0.8f },
-                        onDone = { FocusController.start(context, plan) },
-                    )
+        if (s != null) FocusPage(s, afterBreath = breathing != null, tomatoAt = tomatoAt, onLeave = { leaving = true; nav.pop() })
+        val b = breathing
+        if (b != null) {
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val density = LocalDensity.current
+                val geo = remember(maxWidth, maxHeight) { tomatoGeometry(maxWidth.value, maxHeight.value) }
+                val fallback = with(density) {
+                    val side = geo.size.dp.toPx()
+                    Rect(Offset(geo.cx.dp.toPx() - side / 2f, geo.cy.dp.toPx() - side / 2f), Size(side, side))
                 }
+                BreathOverlay(
+                    tones = remember(b) { FocusTones.of(b.item.color) },
+                    origin = origin,
+                    tomato = { tomatoAt.value },
+                    fallback = fallback,
+                    onGather = {
+                        gathering = true
+                        if (FocusController.pending.value == b) FocusController.start(context, b)
+                    },
+                    onDone = { breathing = null },
+                )
             }
+        } else if (plan != null && (!breathOn || !motionOn)) {
+            LaunchedEffect(plan) { FocusController.start(context, plan) }
         }
     }
 }
@@ -213,8 +232,19 @@ private fun KeepScreenOnBlackBars() {
 }
 
 @Composable
-private fun FocusPage(s0: FocusSession, onLeave: () -> Unit) {
+private fun FocusPage(s0: FocusSession, afterBreath: Boolean, tomatoAt: MutableState<Rect?>, onLeave: () -> Unit) {
     val context = LocalContext.current
+    val view = LocalView.current
+    // After the breath the tomato is the 气 that just landed; the rest settles in around it.
+    val intro = remember { Animatable(if (afterBreath) 0f else 1f) }
+    val tomatoIn = remember { Animatable(if (afterBreath) 0f else 1f) }
+    LaunchedEffect(Unit) {
+        if (intro.value >= 1f) return@LaunchedEffect
+        launch { delay(420); tomatoIn.animateTo(1f, spring(dampingRatio = 1f, stiffness = 380f)) }
+        delay(260)
+        intro.animateTo(1f, spring(dampingRatio = 1f, stiffness = 110f))
+    }
+    val fade = Modifier.graphicsLayer { alpha = intro.value }
     val haptics = rememberRichHaptics()
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -301,7 +331,7 @@ private fun FocusPage(s0: FocusSession, onLeave: () -> Unit) {
                         val k = deskScale(maxWidth.value)
                         val deskClock = (minOf(maxWidth.value * 0.13f, maxHeight.value * 0.26f, 220f).coerceAtLeast(84f) / k).sp
                         val pill: @Composable (Modifier) -> Unit = { m ->
-                            NextPill(today.next, now, chrome, m.onGloballyPositioned { pillRect.value = it.boundsInRoot() }) { todayOpen = true }
+                            NextPill(today.next, now, chrome, m.then(fade).onGloballyPositioned { pillRect.value = it.boundsInRoot() }) { todayOpen = true }
                         }
                         val tomato: @Composable (Modifier) -> Unit = { m ->
                             Tomato(
@@ -310,7 +340,9 @@ private fun FocusPage(s0: FocusSession, onLeave: () -> Unit) {
                                 running = s.running,
                                 open = if (s.phase == Phase.Break) 0.15f else 1f,
                                 popKey = harvestPop,
-                                modifier = m,
+                                modifier = m
+                                    .onGloballyPositioned { tomatoAt.value = tomatoBox(it.screenRect(view)) }
+                                    .graphicsLayer { alpha = tomatoIn.value },
                             )
                         }
                         if (wide) {
@@ -318,7 +350,7 @@ private fun FocusPage(s0: FocusSession, onLeave: () -> Unit) {
                                 Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
                                     tomato(Modifier.size(geo.size.dp))
                                 }
-                                Scaled(k) { Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
+                                Scaled(k) { Column(Modifier.weight(1f).fillMaxHeight().then(fade), verticalArrangement = Arrangement.Center) {
                                     pill(Modifier)
                                     Spacer(Modifier.height(24.dp))
                                     // The desk clock: as large as the right half allows.
@@ -338,19 +370,21 @@ private fun FocusPage(s0: FocusSession, onLeave: () -> Unit) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         tomato(Modifier.size(geo.size.dp))
                                         Spacer(Modifier.height(8.dp))
-                                        Harvest(s, now, focusTones, Arrangement.Center)
-                                        Spacer(Modifier.height(20.dp))
-                                        Clock(s, now, 84.sp)
-                                        Title(s, focusTones, chrome)
+                                        Column(fade, horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Harvest(s, now, focusTones, Arrangement.Center)
+                                            Spacer(Modifier.height(20.dp))
+                                            Clock(s, now, 84.sp)
+                                            Title(s, focusTones, chrome)
+                                        }
                                     }
                                 }
-                                Controls(s, now, tones, focusTones, chrome, onEnd = { ending = s.actualEnd(System.currentTimeMillis()) })
+                                Box(fade) { Controls(s, now, tones, focusTones, chrome, onEnd = { ending = s.actualEnd(System.currentTimeMillis()) }) }
                                 Spacer(Modifier.height(28.dp))
                             }
                         }
                         IconButton(
                             onClick = onLeave,
-                            modifier = Modifier.statusBarsPadding().padding(4.dp).graphicsLayer { alpha = chrome },
+                            modifier = Modifier.statusBarsPadding().padding(4.dp).graphicsLayer { alpha = chrome * intro.value },
                             enabled = chrome > 0.5f,
                         ) { Icon(YoinSymbols.Back, "回到日程", tint = Dim) }
                     }

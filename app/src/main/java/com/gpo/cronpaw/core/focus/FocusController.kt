@@ -51,7 +51,6 @@ object FocusController {
 
     /** The clock starts now (after the breath, or straight away). */
     fun start(context: Context, plan: Plan, now: Long = System.currentTimeMillis()) {
-        _pending.value = null
         val item = plan.item
         val focus = FocusSettings.focusMin.value
         val brk = FocusSettings.breakMin.value
@@ -79,6 +78,8 @@ object FocusController {
         )
         _recovery.value = null
         commit(context, s)
+        // After the commit: the focus page never sees neither a plan nor a session and closes.
+        _pending.value = null
     }
 
     fun pause(context: Context) = update(context) { s, now -> s.pause(now) }
