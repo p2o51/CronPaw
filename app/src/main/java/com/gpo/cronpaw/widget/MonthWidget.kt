@@ -61,8 +61,9 @@ class MonthGlance : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         Agenda.init(context)
+        Agenda.awaitReady()
         val month = YearMonth.now()
-        Agenda.ensure(Times.monday(month.atDay(1)), month.atEndOfMonth())
+        Agenda.ensureWidgetWindow(Times.monday(month.atDay(1)), month.atEndOfMonth())
         provideContent {
             GlanceTheme {
                 val items by Agenda.items.collectAsState()

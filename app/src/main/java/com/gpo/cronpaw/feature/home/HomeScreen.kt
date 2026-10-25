@@ -64,6 +64,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -125,7 +126,7 @@ fun HomeScreen(nav: Nav) {
 
     // A tablet or unfolded screen: the drawer stays, and 周 is the first view until one is picked.
     val wide = LocalConfiguration.current.screenWidthDp >= 840
-    remember(wide) {
+    LaunchedEffect(wide) {
         if (wide && !AppSettings.viewChosen.value && AppSettings.viewDays.value == 3) {
             AppSettings.set(AppSettings.viewDays, 7)
             AppSettings.set(AppSettings.timelineDays, 7)
@@ -136,10 +137,12 @@ fun HomeScreen(nav: Nav) {
     val monthPager = rememberPagerState(initialPage = MonthMid) { MonthMid * 2 }
     val scheduleList = rememberLazyListState()
     val items by Agenda.items.collectAsState()
-    val scheduleRows = remember(items) { scheduleRows(items) }
+    var shown by remember { mutableIntStateOf(viewDays) }
+    val scheduleRows = remember(items, viewDays, shown) {
+        if (viewDays == AppSettings.ViewSchedule || shown == AppSettings.ViewSchedule) scheduleRows(items) else emptyList()
+    }
 
     // ── Switching views: the old one fades and shrinks a little, the new one springs in ──
-    var shown by remember { mutableIntStateOf(viewDays) }
     val viewIn = remember { Animatable(1f) }
     LaunchedEffect(viewDays) {
         if (viewDays == 2) { AppSettings.set(AppSettings.viewDays, 3); return@LaunchedEffect } // 2 天 is gone
@@ -187,6 +190,8 @@ fun HomeScreen(nav: Nav) {
         snapshotFlow { Triple(tl.first, tl.last, shown > 0) }.collect { (a, b, onTimeline) -> if (onTimeline) Agenda.ensure(a, b) }
     }
 
+    val currentScheduleRows by rememberUpdatedState(scheduleRows)
+
     // ── Sheets ──
     var selected by remember { mutableStateOf<AgendaItem?>(null) }
     var showUpcoming by remember { mutableStateOf(false) }
@@ -198,7 +203,7 @@ fun HomeScreen(nav: Nav) {
             HomeRequests.jump.value = null
             when {
                 shown == AppSettings.ViewMonth -> monthPager.animateScrollToPage(monthPage(YearMonth.from(j.date)))
-                shown == AppSettings.ViewSchedule -> scheduleList.animateScrollToItem(scheduleIndexOf(scheduleRows, j.date))
+                shown == AppSettings.ViewSchedule -> scheduleList.animateScrollToItem(scheduleIndexOf(currentScheduleRows, j.date))
                 j.exactFirst -> tl.showFrom(j.date)
                 else -> tl.show(j.date)
             }

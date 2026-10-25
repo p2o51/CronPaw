@@ -1,12 +1,21 @@
 package com.gpo.cronpaw.core.agenda
 
 import android.content.Context
+import android.util.AtomicFile
+import com.gpo.cronpaw.core.concurrent.LatestRefresh
+import com.gpo.cronpaw.core.concurrent.LatestWriter
+import com.gpo.cronpaw.core.notion.NotionDb
 import com.gpo.cronpaw.core.notion.NotionClient
 import com.gpo.cronpaw.core.notion.NotionRepo
 import com.gpo.cronpaw.core.settings.AppSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -45,9 +54,15 @@ object Agenda {
 
     /** The loaded window, as local dates [from, to]. */
     private var window: Pair<LocalDate, LocalDate>? = null
+    private var widgetWindow: Pair<LocalDate, LocalDate>? = null
     private var calItems: List<AgendaItem> = emptyList()
     private var notionItems: List<AgendaItem> = emptyList()
-    private var notionJob: Job? = null
+    private var cacheLoad: Job? = null
+    private lateinit var cacheWriter: LatestWriter<List<AgendaItem>>
+    private data class CalendarRead(val bounds: List<Pair<Long, Long>>, val hidden: Set<Long>)
+    private data class NotionRead(val bounds: List<Pair<Long, Long>>, val databases: List<NotionDb>, val connected: Boolean)
+    private val calendarRefresh = LatestRefresh<CalendarRead, Unit>(scope)
+    private val notionRefresh = LatestRefresh<NotionRead, Unit>(scope)
 
     /** Optimistic local edits not yet confirmed by a reload: key → replacement (null = removed). */
     private val overlay = mutableMapOf<String, AgendaItem?>()
@@ -57,17 +72,41 @@ object Agenda {
     fun init(context: Context) {
         if (::app.isInitialized) return
         app = context.applicationContext
-        val cached = runCatching {
-            NotionClient.json.decodeFromString(cacheSerializer, cacheFile().readText())
-        }.getOrNull()
-        if (cached != null) _items.value = cached
+        cacheWriter = LatestWriter(CoroutineScope(SupervisorJob() + Dispatchers.IO)) { snapshot ->
+            val bytes = NotionClient.json.encodeToString(cacheSerializer, snapshot).toByteArray()
+            val file = cacheFile()
+            val stream = file.startWrite()
+            try {
+                stream.write(bytes)
+                file.finishWrite(stream)
+            } catch (error: Exception) {
+                file.failWrite(stream)
+                throw error
+            }
+        }
+        cacheLoad = scope.launch {
+            val cached = withContext(Dispatchers.IO) {
+                runCatching {
+                    cacheFile().openRead().bufferedReader().use {
+                        NotionClient.json.decodeFromString(cacheSerializer, it.readText())
+                    }
+                }.getOrNull()
+            }
+            if (cached != null) {
+                calItems = cached.filter { it.source is Source.Calendar }
+                notionItems = cached.filter { it.source is Source.Notion }
+                if (overlay.isEmpty()) _items.value = cached else publish()
+            }
+        }
         scope.launch {
             @OptIn(kotlinx.coroutines.FlowPreview::class)
-            CalendarRepo.changes(app).debounce(300).collect { reloadCalendars() }
+            CalendarRepo.changes(app).debounce(300).collect { reloadCalendars(force = true) }
         }
     }
 
-    private fun cacheFile() = File(app.filesDir, "agenda_cache.json")
+    private fun cacheFile() = AtomicFile(File(app.filesDir, "agenda_cache.json"))
+
+    suspend fun awaitReady() { cacheLoad?.join() }
 
     val hiddenCalendars: Set<Long>
         get() = AppSettings.hiddenCalendars.value.split(',').mapNotNull { it.toLongOrNull() }.toSet()
@@ -89,61 +128,106 @@ object Agenda {
 
     /** Make sure [from]..[to] (local dates) is loaded, with a margin either side. */
     fun ensure(from: LocalDate, to: LocalDate, force: Boolean = false) {
-        val cur = window
-        if (!force && cur != null && !from.isBefore(cur.first) && !to.isAfter(cur.second)) return
-        window = from.minusDays(7) to to.plusDays(14)
-        refresh()
+        scope.launch {
+            val cur = window
+            if (!force && cur != null && !from.isBefore(cur.first) && !to.isAfter(cur.second)) return@launch
+            window = from.minusDays(7) to to.plusDays(14)
+            refresh()
+        }
     }
 
-    fun refresh() {
-        scope.launch { reloadCalendars() }
-        reloadNotion()
+    fun refresh(): Job = scope.launch { refreshAndAwait() }
+
+    /** Workers wait for the actual reads, including slow Notion responses. */
+    suspend fun refreshAndAwait() = withContext(Dispatchers.Main.immediate) {
+        coroutineScope {
+            val calendars = async { reloadCalendars() }
+            val notion = reloadNotion()
+            calendars.await()
+            notionRefresh.awaitLatest(notion)
+        }
     }
 
-    private fun bounds(): Pair<Long, Long> {
+    /** The widget's current month must not replace the date the user is browsing. */
+    fun ensureWidgetWindow(from: LocalDate, to: LocalDate) {
+        scope.launch {
+            val next = from to to
+            if (widgetWindow == next) return@launch
+            widgetWindow = next
+            refresh()
+        }
+    }
+
+    fun clearWidgetWindow() {
+        scope.launch { widgetWindow = null }
+    }
+
+    private fun bounds(): List<Pair<Long, Long>> {
         val zone = ZoneId.systemDefault()
-        val w = window ?: (LocalDate.now().minusDays(7) to LocalDate.now().plusDays(14))
-        return w.first.atStartOfDay(zone).toInstant().toEpochMilli() to
-            w.second.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val primary = window ?: (LocalDate.now().minusDays(7) to LocalDate.now().plusDays(14))
+        return mergeReadWindows(listOfNotNull(primary, widgetWindow).map { w ->
+            w.first.atStartOfDay(zone).toInstant().toEpochMilli() to
+                w.second.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        })
     }
 
-    suspend fun reloadCalendars() {
-        if (!::app.isInitialized) return
-        val cals = CalendarRepo.calendars(app)
-        _calendars.value = cals
-        val (from, to) = bounds()
-        calItems = CalendarRepo.instances(app, from, to, cals.associateBy { it.id }, hiddenCalendars + removedCalendars)
-        overlay.keys.removeAll { it.startsWith("cal:") || it.startsWith("new:cal") }
-        publish()
+    suspend fun reloadCalendars(force: Boolean = false) = withContext(Dispatchers.Main.immediate) {
+        if (!::app.isInitialized) return@withContext
+        val request = CalendarRead(bounds(), hiddenCalendars + removedCalendars)
+        calendarRefresh.awaitLatest(calendarRefresh.request(request, force) {
+            awaitReady()
+            val cals = CalendarRepo.calendars(app)
+            val byId = cals.associateBy { it.id }
+            val loaded = request.bounds.flatMap { (from, to) ->
+                CalendarRepo.instances(app, from, to, byId, request.hidden)
+            }
+            currentCoroutineContext().ensureActive()
+            _calendars.value = cals
+            calItems = loaded
+            clearOverlay { it.startsWith("cal:") || it.startsWith("new:cal") }
+            publish()
+        })
     }
 
-    private fun reloadNotion() {
-        notionJob?.cancel()
-        notionJob = scope.launch {
-            _loading.value = true
-            val (from, to) = bounds()
-            notionItems = NotionRepo.items(from, to)
+    private fun reloadNotion(force: Boolean = false) = notionRefresh.request(
+        NotionRead(bounds(), NotionRepo.databases.value, NotionClient.hasToken), force,
+    ) {
+        _loading.value = true
+        try {
+            awaitReady()
+            val ranges = bounds()
+            notionItems = ranges.flatMap { (from, to) -> NotionRepo.items(from, to) }
+            currentCoroutineContext().ensureActive()
             // A write still in flight isn't in the query yet: keep its local copy a little longer.
             val now = System.currentTimeMillis()
-            overlay.keys.removeAll { it.startsWith("new:notion") || it.startsWith("notion:") && now - (overlaidAt[it] ?: 0) > 15_000 }
+            clearOverlay { it.startsWith("new:notion") || it.startsWith("notion:") && now - (overlaidAt[it] ?: 0) > 15_000 }
             publish()
-            _loading.value = false
             val counts = mutableMapOf<String, Int>()
             for (db in NotionRepo.databases.value.filter { it.enabled }) counts[db.id] = NotionRepo.unscheduledCount(db)
             _unscheduled.value = counts
+        } finally {
+            // A cancelled older read must not hide its replacement's loading indicator.
+            if (currentCoroutineContext().isActive) _loading.value = false
+        }
+    }
+
+    private fun clearOverlay(predicate: (String) -> Boolean) {
+        val keys = overlay.keys.filter(predicate)
+        for (key in keys) {
+            overlay.remove(key)
+            overlaidAt.remove(key)
         }
     }
 
     private fun publish() {
         val enabledDbs = NotionRepo.databases.value.filter { it.enabled }.map { it.id }.toSet()
         val notion = notionItems.filter { (it.source as Source.Notion).databaseId in enabledDbs }
-        var all = (calItems + notion).associateBy { it.key }.toMutableMap()
+        val all = (calItems + notion).associateBy { it.key }.toMutableMap()
         for ((k, v) in overlay) if (v == null) all.remove(k) else all[k] = v
-        _items.value = all.values.sortedWith(compareBy({ it.start }, { -it.durationMinutes }))
-        val snapshot = _items.value
-        scope.launch(Dispatchers.IO) {
-            runCatching { cacheFile().writeText(NotionClient.json.encodeToString(cacheSerializer, snapshot)) }
-        }
+        val snapshot = all.values.sortedWith(compareBy({ it.start }, { -it.durationMinutes }))
+        if (snapshot == _items.value) return
+        _items.value = snapshot
+        cacheWriter.submit(snapshot)
         AgendaEvents.changed()
     }
 
@@ -162,12 +246,14 @@ object Agenda {
 
     fun forget(key: String) {
         overlay.remove(key)
+        overlaidAt.remove(key)
         publish()
     }
 
     suspend fun afterWrite() = withContext(Dispatchers.Main) {
-        reloadCalendars()
-        reloadNotion()
+        reloadCalendars(force = true)
+        reloadNotion(force = true)
+        Unit
     }
 }
 

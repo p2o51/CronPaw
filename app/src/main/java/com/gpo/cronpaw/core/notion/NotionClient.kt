@@ -1,6 +1,7 @@
 package com.gpo.cronpaw.core.notion
 
 import com.gpo.cronpaw.core.settings.AppSettings
+import com.gpo.cronpaw.core.concurrent.awaitBody
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -34,6 +35,7 @@ object NotionClient {
     private val JsonType = "application/json; charset=utf-8".toMediaType()
 
     private val http = OkHttpClient.Builder()
+        .callTimeout(45, TimeUnit.SECONDS)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
@@ -60,16 +62,16 @@ object NotionClient {
             .header("Notion-Version", Version)
             .method(method, body?.toString()?.toRequestBody(JsonType) ?: if (method == "GET") null else "{}".toRequestBody(JsonType))
             .build()
-        http.newCall(req).execute().use { res ->
-            val text = res.body.string()
-            val obj = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull()
-            if (!res.isSuccessful || obj == null) {
-                val msg = obj?.get("message")?.jsonPrimitive?.contentOrNull ?: "HTTP ${res.code}"
-                throw NotionException(msg, res.code)
-            }
-            obj
+        val res = http.newCall(req).awaitBody()
+        val obj = runCatching { json.parseToJsonElement(res.text).jsonObject }.getOrNull()
+        if (!res.isSuccessful || obj == null) {
+            val msg = obj?.get("message")?.jsonPrimitive?.contentOrNull ?: "HTTP ${res.code}"
+            throw NotionException(msg, res.code)
         }
+        obj
     }
+
+    suspend fun page(id: String): JsonObject = call("GET", "/pages/$id")
 
     /** Databases the integration can see. */
     suspend fun searchDatabases(): List<DatabaseSummary> {

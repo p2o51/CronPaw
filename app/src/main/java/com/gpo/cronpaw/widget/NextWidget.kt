@@ -56,6 +56,7 @@ class NextGlance : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         Agenda.init(context)
+        Agenda.awaitReady()
         provideContent {
             GlanceTheme {
                 val items by Agenda.items.collectAsState()

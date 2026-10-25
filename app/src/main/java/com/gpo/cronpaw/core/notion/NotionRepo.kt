@@ -1,5 +1,6 @@
 package com.gpo.cronpaw.core.notion
 
+import com.gpo.cronpaw.core.concurrent.suspendResult
 import com.gpo.cronpaw.core.agenda.AgendaItem
 import com.gpo.cronpaw.core.agenda.Source
 import com.gpo.cronpaw.core.notion.NotionClient.str
@@ -71,7 +72,13 @@ object NotionRepo {
     private val schemas = mutableMapOf<String, DatabaseSchema>()
 
     /** Raw pages by page id from the latest queries: the sheet reads properties from here. */
-    private val pages = mutableMapOf<String, JsonObject>()
+    private val pages = object : LinkedHashMap<String, JsonObject>(128, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, JsonObject>): Boolean {
+            val remove = size > 1_000
+            if (remove) written.remove(eldest.key)
+            return remove
+        }
+    }
 
     /** Pages we just wrote, and when: Notion's query lags a few seconds behind a write. */
     private val written = mutableMapOf<String, Long>()
@@ -131,7 +138,7 @@ object NotionRepo {
         val toIso = Instant.ofEpochMilli(to).atZone(zone).toLocalDate().plusDays(1).toString()
         val out = mutableListOf<AgendaItem>()
         for (db in _databases.value.filter { it.enabled }) {
-            val result = runCatching { NotionClient.query(db.id, db.dateProp, fromIso, toIso) }.getOrNull() ?: continue
+            val result = suspendResult { NotionClient.query(db.id, db.dateProp, fromIso, toIso) }.getOrNull() ?: continue
             for (raw in result) {
                 val page = fromQuery(raw)
                 toItem(db, page, zone)?.let { out += it }
@@ -141,11 +148,11 @@ object NotionRepo {
     }
 
     suspend fun unscheduledCount(db: NotionDb): Int =
-        runCatching { NotionClient.unscheduled(db.id, db.dateProp).count { !isDone(db, it) } }.getOrDefault(0)
+        suspendResult { NotionClient.unscheduled(db.id, db.dateProp).count { !isDone(db, it) } }.getOrDefault(0)
 
     /** Pages with no date yet, not done: the 未排期 tray. Start and end are 0. */
     suspend fun unscheduledItems(db: NotionDb): List<AgendaItem> =
-        runCatching { NotionClient.unscheduled(db.id, db.dateProp) }.getOrDefault(emptyList())
+        suspendResult { NotionClient.unscheduled(db.id, db.dateProp) }.getOrDefault(emptyList())
             .map { fromQuery(it) }
             .filter { !isDone(db, it) }
             .map { page ->
@@ -207,8 +214,10 @@ object NotionRepo {
 
     /** Every property of a cached page, in schema order, for the sheet and its eye menu. */
     suspend fun properties(db: NotionDb, pageId: String): List<PropValue> {
-        val schema = runCatching { schema(db.id) }.getOrNull()
-        val props = pages[pageId]?.get("properties")?.jsonObject ?: return emptyList()
+        val schema = suspendResult { schema(db.id) }.getOrNull()
+        val page = pages[pageId] ?: suspendResult { NotionClient.page(pageId) }
+            .getOrNull()?.let { fromQuery(it) } ?: return emptyList()
+        val props = page["properties"]?.jsonObject ?: return emptyList()
         val order = schema?.props?.map { it.name } ?: props.keys.toList()
         return order.mapNotNull { name ->
             val v = props[name]?.jsonObject ?: return@mapNotNull null

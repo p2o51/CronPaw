@@ -63,6 +63,7 @@ class AgendaGlance : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         Agenda.init(context)
+        Agenda.awaitReady()
         provideContent {
             GlanceTheme {
                 val items by Agenda.items.collectAsState()
@@ -159,6 +160,7 @@ class ToggleDone : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val key = parameters[Key] ?: return
         Agenda.init(context)
+        Agenda.awaitReady()
         val item = Agenda.items.value.firstOrNull { it.key == key } ?: return
         Actions.setDone(item, !item.done)
         WidgetSync.update(context)

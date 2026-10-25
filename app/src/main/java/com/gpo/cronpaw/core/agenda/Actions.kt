@@ -3,6 +3,8 @@ package com.gpo.cronpaw.core.agenda
 import android.content.Context
 import com.gpo.cronpaw.core.notion.NotionRepo
 import com.gpo.cronpaw.core.settings.AppSettings
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,11 +37,11 @@ sealed interface Target {
  */
 object Actions {
 
-    suspend fun setDone(item: AgendaItem, done: Boolean): Boolean {
-        val src = item.source as? Source.Notion ?: return false
-        val db = NotionRepo.db(src.databaseId) ?: return false
+    suspend fun setDone(item: AgendaItem, done: Boolean): Boolean = withContext(Dispatchers.Main.immediate) {
+        val src = item.source as? Source.Notion ?: return@withContext false
+        val db = NotionRepo.db(src.databaseId) ?: return@withContext false
         Agenda.applyLocal(item.copy(done = done))
-        return runCatching { NotionRepo.setDone(db, src.pageId, done) }
+        runCatching { NotionRepo.setDone(db, src.pageId, done) }
             .onFailure { Agenda.applyLocal(item) }
             .isSuccess
     }
