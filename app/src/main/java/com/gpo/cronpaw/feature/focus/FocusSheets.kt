@@ -30,14 +30,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -66,11 +65,11 @@ import com.gpo.cronpaw.core.focus.FocusStore
 import com.gpo.cronpaw.core.focus.FocusZen
 import com.gpo.cronpaw.core.focus.breakColor
 import com.gpo.cronpaw.ui.components.LocalToastScope
+import com.gpo.cronpaw.ui.components.WideSlider
 import com.gpo.cronpaw.ui.components.rememberToast
 import com.gpo.cronpaw.ui.theme.YoinMotion
 import com.gpo.cronpaw.ui.theme.rememberRichHaptics
 import com.gpo.cronpaw.ui.time.Times
-import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -245,8 +244,8 @@ fun RecoverySheet(s: FocusSession, onOpenFocus: () -> Unit, onDismiss: () -> Uni
     )
     var pickedIndex by remember { mutableStateOf(0) }
     val picked = choices[pickedIndex.coerceIn(0, choices.lastIndex)].second
-    var nudge by remember { mutableFloatStateOf(0f) }
-    val end = (picked + (nudge.roundToInt() * 5) * 60_000L).coerceIn(minOf(s.startedAt + 60_000L, now), now)
+    var nudge by remember { mutableIntStateOf(0) }
+    val end = (picked + (nudge * 5) * 60_000L).coerceIn(minOf(s.startedAt + 60_000L, now), now)
     val minutes = ((end - s.startedAt + 30_000L) / 60_000L).toInt()
     val finish: (suspend () -> Unit) -> Unit = { block -> root.launch { block() }; local.launch { runCatching { sheet.hide() }; onDismiss() } }
 
@@ -271,19 +270,22 @@ fun RecoverySheet(s: FocusSession, onOpenFocus: () -> Unit, onDismiss: () -> Uni
                     val bg by animateColorAsState(if (on) cs.primary else cs.surfaceContainerHighest, YoinMotion.defaultEffectsSpec(), label = "end")
                     Text(
                         label,
-                        Modifier.clip(CircleShape).background(bg).clickable { haptics.tick(); pickedIndex = i; nudge = 0f }.padding(horizontal = 14.dp, vertical = 8.dp),
+                        Modifier.clip(CircleShape).background(bg).clickable { haptics.tick(); pickedIndex = i; nudge = 0 }.padding(horizontal = 14.dp, vertical = 8.dp),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = if (on) cs.onPrimary else cs.onSurfaceVariant,
                     )
                 }
             }
-            Slider(
-                value = nudge,
-                onValueChange = { if (it.roundToInt() != nudge.roundToInt()) haptics.tick(); nudge = it },
-                valueRange = -12f..12f,
-                steps = 23,
+            // Each step is 5 minutes either way; the middle dot is the chosen end itself.
+            WideSlider(
+                value = nudge + 12,
+                count = 25,
+                onValueChange = { if (it - 12 != nudge) haptics.tick(); nudge = it - 12 },
+                description = "微调结束时间",
+                state = Times.hm(end),
                 modifier = Modifier.padding(top = 8.dp),
+                marks = setOf(12),
             )
             Spacer(Modifier.height(12.dp))
             Button(

@@ -829,8 +829,12 @@ private fun EndPage(s: FocusSession, endAt: Long, tones: FocusTones, onLeave: ()
                 Harvest(s, now, tones, Arrangement.Start)
                 Spacer(Modifier.height(24.dp))
                 if (s.source != null && minutes >= 1) {
-                    TimeRow("原来", if (s.itemStart > 0) "${Times.hm(s.itemStart)} 到 ${Times.hm(s.itemEnd)}" else "未排期", Dim)
-                    TimeRow("改成", "${Times.hm(s.startedAt)} 到 ${Times.hm(endAt)}", NearWhite)
+                    // Was → becomes: what 完成 will write.
+                    Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (s.itemStart > 0) "${Times.hm(s.itemStart)}–${Times.hm(s.itemEnd)}" else "未排期", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Dim)
+                        Text("→", Modifier.padding(horizontal = 10.dp), style = MaterialTheme.typography.titleMedium, color = Dimmer)
+                        Text("${Times.hm(s.startedAt)}–${Times.hm(endAt)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = NearWhite)
+                    }
                 }
                 Spacer(Modifier.height(28.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -853,14 +857,6 @@ private fun EndPage(s: FocusSession, endAt: Long, tones: FocusTones, onLeave: ()
                 details()
             }
         }
-    }
-}
-
-@Composable
-private fun TimeRow(label: String, value: String, ink: Color) {
-    Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.width(48.dp), style = MaterialTheme.typography.labelLarge, color = Dimmer)
-        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = ink)
     }
 }
 
