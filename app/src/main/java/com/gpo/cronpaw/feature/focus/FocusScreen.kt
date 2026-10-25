@@ -48,8 +48,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -787,17 +785,26 @@ private fun EndPage(s: FocusSession, endAt: Long, tones: FocusTones, onLeave: ()
     val scope = LocalToastScope.current ?: rememberCoroutineScope()
     val toast = rememberToast()
     val haptics = rememberRichHaptics()
-    var rewrite by remember { mutableStateOf(true) }
-    var saving by remember { mutableStateOf(false) }
+    var leaving by remember { mutableStateOf(false) }
     val minutes = ((endAt - s.startedAt + 30_000L) / 60_000L).toInt()
-    val save: (Boolean) -> Unit = { done ->
-        if (!saving) {
-            saving = true
+    // Two ways out only. 完成: the item takes the time actually used and a todo is ticked.
+    // 放弃: nothing is written to the item.
+    val complete: () -> Unit = {
+        if (!leaving) {
+            leaving = true
             haptics.celebrate()
             onLeave()
             scope.launch {
-                if (!FocusController.finish(context, rewrite && minutes >= 1, done, endAt)) toast("没改成")
+                if (!FocusController.finish(context, rewrite = minutes >= 1, markDone = true, endAt = endAt)) toast("没改成")
             }
+        }
+    }
+    val giveUp: () -> Unit = {
+        if (!leaving) {
+            leaving = true
+            haptics.lowTick()
+            onLeave()
+            FocusController.discard(context)
         }
     }
     BoxWithConstraints(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
@@ -823,26 +830,12 @@ private fun EndPage(s: FocusSession, endAt: Long, tones: FocusTones, onLeave: ()
                 Spacer(Modifier.height(24.dp))
                 if (s.source != null && minutes >= 1) {
                     TimeRow("原来", if (s.itemStart > 0) "${Times.hm(s.itemStart)} 到 ${Times.hm(s.itemEnd)}" else "未排期", Dim)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.weight(1f)) { TimeRow("改成", "${Times.hm(s.startedAt)} 到 ${Times.hm(endAt)}", if (rewrite) NearWhite else Dimmer) }
-                        Switch(
-                            checked = rewrite,
-                            onCheckedChange = { haptics.tick(); rewrite = it },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.Black, checkedTrackColor = tones.bright,
-                                uncheckedThumbColor = Dim, uncheckedTrackColor = Faint, uncheckedBorderColor = Dimmer,
-                            ),
-                        )
-                    }
+                    TimeRow("改成", "${Times.hm(s.startedAt)} 到 ${Times.hm(endAt)}", NearWhite)
                 }
                 Spacer(Modifier.height(28.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (s.todo) {
-                        EndButton("完成待办", filled = true, tones, Modifier.weight(1f)) { save(true) }
-                        EndButton("保存", filled = false, tones, Modifier.weight(1f)) { save(false) }
-                    } else {
-                        EndButton("保存", filled = true, tones, Modifier.weight(1f)) { save(false) }
-                    }
+                    EndButton("完成", filled = true, tones, Modifier.weight(1f)) { complete() }
+                    EndButton("放弃", filled = false, tones, Modifier.weight(1f)) { giveUp() }
                 }
             }
         }

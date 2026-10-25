@@ -159,14 +159,14 @@ object FocusController {
         return ok
     }
 
-    /** 不记 (上次专注): nothing is written to the item, but the session still goes into [FocusLog]. */
-    fun discard(context: Context) {
+    /** 放弃: nothing is written to the item, but the session still goes into [FocusLog]. */
+    fun discard(context: Context, recovered: Boolean = false) {
         val s = FocusStore.value
         val now = System.currentTimeMillis()
         clear(context)
         if (s != null) {
             val cur = advance(s, now)
-            FocusLog.add(context, cur, cur.actualEnd(now), "discarded", markedDone = false, recovered = true)
+            FocusLog.add(context, cur, cur.actualEnd(now), "discarded", markedDone = false, recovered = recovered)
         }
     }
 

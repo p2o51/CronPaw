@@ -289,11 +289,11 @@ fun RecoverySheet(s: FocusSession, onOpenFocus: () -> Unit, onDismiss: () -> Uni
             Button(
                 onClick = {
                     haptics.celebrate()
-                    finish { if (!FocusController.finish(context, rewrite = true, markDone = false, endAt = end)) toast("没改成") }
+                    finish { if (!FocusController.finish(context, rewrite = true, markDone = true, endAt = end)) toast("没改成") }
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = CircleShape,
-            ) { Text("保存", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+            ) { Text("完成", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilledTonalButton(
@@ -305,10 +305,10 @@ fun RecoverySheet(s: FocusSession, onOpenFocus: () -> Unit, onDismiss: () -> Uni
                     modifier = Modifier.weight(1f).height(48.dp),
                 ) { Text("接着计时", fontWeight = FontWeight.Bold) }
                 TextButton(
-                    onClick = { haptics.lowTick(); FocusController.discard(context); finish { } },
+                    onClick = { haptics.lowTick(); FocusController.discard(context, recovered = true); finish { } },
                     modifier = Modifier.weight(1f).height(48.dp),
                     colors = ButtonDefaults.textButtonColors(contentColor = cs.onSurfaceVariant),
-                ) { Text("不记") }
+                ) { Text("放弃") }
             }
         }
     }
