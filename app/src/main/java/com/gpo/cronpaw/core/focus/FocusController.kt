@@ -90,7 +90,7 @@ object FocusController {
     fun touch(context: Context) {
         val s = FocusStore.value ?: return
         val now = System.currentTimeMillis()
-        if (now - s.lastSeen > 60_000L) FocusStore.save(s.copy(lastSeen = now))
+        if (now - s.lastSeen > 25_000L) FocusStore.save(s.copy(lastSeen = now))
     }
 
     private fun update(context: Context, block: (FocusSession, Long) -> FocusSession) {

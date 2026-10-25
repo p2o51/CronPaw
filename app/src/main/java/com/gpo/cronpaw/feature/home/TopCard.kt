@@ -122,7 +122,9 @@ fun TopCard(
 ) {
     // While a session runs the card is the timer and stays put.
     val focus by FocusStore.session.collectAsState()
-    focus?.let { FocusCard(it, onOpenFocus, modifier); return }
+    // Not while 上次专注 asks how it ended: the clock there is not to be trusted.
+    val asking by FocusController.recovery.collectAsState()
+    focus?.takeIf { asking == null }?.let { FocusCard(it, onOpenFocus, modifier); return }
     val pins by Pins.keys.collectAsState()
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle

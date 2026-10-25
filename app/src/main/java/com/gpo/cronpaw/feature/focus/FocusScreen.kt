@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -52,6 +53,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -216,8 +218,9 @@ private fun FocusPage(s0: FocusSession, onLeave: () -> Unit) {
     val haptics = rememberRichHaptics()
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
-        FocusController.touch(context)
         while (true) {
+            // The app is in front: 上次专注's 「最后一次用」 stays within half a minute.
+            if (now / 1000L % 30L == 0L) FocusController.touch(context)
             now = System.currentTimeMillis()
             delay(1000L - now % 1000L)
         }
@@ -294,7 +297,9 @@ private fun FocusPage(s0: FocusSession, onLeave: () -> Unit) {
                     BoxWithConstraints(Modifier.fillMaxSize().offset { shift }) {
                         val wide = maxWidth > maxHeight && (maxWidth >= 600.dp || maxHeight < 480.dp)
                         val geo = tomatoGeometry(maxWidth.value, maxHeight.value)
-                        val deskClock = minOf(maxWidth.value * 0.13f, maxHeight.value * 0.26f, 220f).coerceAtLeast(84f).sp
+                        // A tablet on a desk is read from further away: the right half grows as a whole.
+                        val k = deskScale(maxWidth.value)
+                        val deskClock = (minOf(maxWidth.value * 0.13f, maxHeight.value * 0.26f, 220f).coerceAtLeast(84f) / k).sp
                         val pill: @Composable (Modifier) -> Unit = { m ->
                             NextPill(today.next, now, chrome, m.onGloballyPositioned { pillRect.value = it.boundsInRoot() }) { todayOpen = true }
                         }
@@ -313,7 +318,7 @@ private fun FocusPage(s0: FocusSession, onLeave: () -> Unit) {
                                 Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
                                     tomato(Modifier.size(geo.size.dp))
                                 }
-                                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
+                                Scaled(k) { Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
                                     pill(Modifier)
                                     Spacer(Modifier.height(24.dp))
                                     // The desk clock: as large as the right half allows.
@@ -323,7 +328,7 @@ private fun FocusPage(s0: FocusSession, onLeave: () -> Unit) {
                                     Harvest(s, now, focusTones, Arrangement.Start)
                                     Spacer(Modifier.height(28.dp))
                                     Controls(s, now, tones, focusTones, chrome, onEnd = { ending = s.actualEnd(System.currentTimeMillis()) }, wide = true)
-                                }
+                                } }
                             }
                         } else {
                             Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -365,10 +370,29 @@ private fun FocusPage(s0: FocusSession, onLeave: () -> Unit) {
                     .background(Color.Black)
                     .clickable(remember { MutableInteractionSource() }, indication = null) {},
             ) {
-                TodayPage(s, now, today, focusTones, progress = { open.value }, onClose = { todayOpen = false })
+                BoxWithConstraints {
+                    Scaled(deskScale(maxWidth.value)) {
+                        TodayPage(s, now, today, focusTones, progress = { open.value }, onClose = { todayOpen = false })
+                    }
+                }
             }
         }
     }
+}
+
+/** How much bigger a wide screen draws its text and buttons (1 on phones, up to 1.5 on a tablet). */
+private fun deskScale(widthDp: Float): Float = if (widthDp < 840f) 1f else (widthDp / 900f).coerceIn(1f, 1.5f)
+
+@Composable
+private fun RowScope.Scaled(k: Float, content: @Composable RowScope.() -> Unit) {
+    val d = LocalDensity.current
+    CompositionLocalProvider(LocalDensity provides Density(d.density * k, d.fontScale)) { content() }
+}
+
+@Composable
+private fun Scaled(k: Float, content: @Composable () -> Unit) {
+    val d = LocalDensity.current
+    CompositionLocalProvider(LocalDensity provides Density(d.density * k, d.fontScale)) { content() }
 }
 
 private val Shifts = listOf(IntOffset(0, 0), IntOffset(3, 2), IntOffset(-2, 4), IntOffset(-4, -1), IntOffset(2, -3), IntOffset(4, 1))
@@ -742,7 +766,7 @@ private fun EndPage(s: FocusSession, endAt: Long, tones: FocusTones, onLeave: ()
         val details: @Composable () -> Unit = {
             Column(Modifier.widthIn(max = 420.dp)) {
                 Row(verticalAlignment = Alignment.Bottom) {
-                    Text("$minutes", style = TextStyle(fontFamily = ThinFlex, fontWeight = FontWeight.ExtraLight, fontSize = 72.sp, fontFeatureSettings = "tnum"), color = ClockGrey)
+                    Text(if (minutes < 1) "<1" else "$minutes", style = TextStyle(fontFamily = ThinFlex, fontWeight = FontWeight.ExtraLight, fontSize = 72.sp, fontFeatureSettings = "tnum"), color = ClockGrey)
                     Text("分钟", Modifier.padding(start = 6.dp, bottom = 14.dp), style = MaterialTheme.typography.titleMedium, color = Dim)
                 }
                 Text(s.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = tones.bright, maxLines = 1, overflow = TextOverflow.Ellipsis)
