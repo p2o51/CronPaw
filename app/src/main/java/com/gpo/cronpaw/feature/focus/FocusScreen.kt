@@ -803,7 +803,8 @@ private fun EndPage(s: FocusSession, endAt: Long, tones: FocusTones, onLeave: ()
         if (wide) {
             Row(Modifier.fillMaxSize().padding(horizontal = 32.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { tomato() }
-                Box(Modifier.weight(1f)) { Scaled(endScale) { details() } }
+                // Qualified so the outer Row doesn't pull in RowScope.Scaled.
+                Box(Modifier.weight(1f)) { com.gpo.cronpaw.feature.focus.Scaled(endScale) { details() } }
             }
         } else {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
