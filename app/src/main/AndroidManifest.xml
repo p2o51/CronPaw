@@ -7,6 +7,13 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- 专注: the ongoing timer (a Live Update on Android 16), its alarms and CronPaw's own mode. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- System speech recognition (Android 11+ package visibility). -->
     <queries>
@@ -98,6 +105,16 @@
         <receiver
             android:name=".widget.WidgetTick"
             android:exported="false" />
+
+        <!-- 专注: alarms, the notification's buttons, a restart, an update (core/focus/FocusController). -->
+        <receiver
+            android:name=".core.focus.FocusReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Re-renders the widget when the calendar provider changes (widget/CalendarChangeJob). -->
         <service

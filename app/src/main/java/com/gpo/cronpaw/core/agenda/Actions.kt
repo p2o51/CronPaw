@@ -46,10 +46,15 @@ object Actions {
             .isSuccess
     }
 
-    suspend fun move(context: Context, item: AgendaItem, start: Long, end: Long): Boolean {
+    /** [onlyThis]: a repeating event changes this occurrence only. */
+    suspend fun move(context: Context, item: AgendaItem, start: Long, end: Long, onlyThis: Boolean = false): Boolean {
         Agenda.applyLocal(item.copy(start = start, end = end))
         val ok = when (val src = item.source) {
-            is Source.Calendar -> CalendarRepo.updateTimes(context, src.eventId, start, end)
+            is Source.Calendar -> {
+                val originalBegin = item.key.substringAfterLast(':').toLongOrNull()
+                if (onlyThis && originalBegin != null) CalendarRepo.updateInstanceTimes(context, src.eventId, originalBegin, start, end)
+                else CalendarRepo.updateTimes(context, src.eventId, start, end)
+            }
             is Source.Notion -> {
                 val db = NotionRepo.db(src.databaseId)
                 db != null && runCatching { NotionRepo.setTimes(db, src.pageId, start, end, item.allDay) }.isSuccess

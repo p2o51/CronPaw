@@ -27,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.gpo.cronpaw.core.agenda.Agenda
+import com.gpo.cronpaw.core.focus.FocusController
+import com.gpo.cronpaw.core.focus.FocusNotifier
 import com.gpo.cronpaw.feature.home.HomeRequests
 import com.gpo.cronpaw.navigation.CronNavHost
 import com.gpo.cronpaw.ui.components.LocalSnackbarHost
@@ -84,6 +86,10 @@ class MainActivity : ComponentActivity() {
 
     /** A widget's tap: go to that day, and open the item's sheet when it named one. */
     private fun openFrom(intent: Intent?) {
+        if (intent?.getBooleanExtra(FocusNotifier.OpenFocus, false) == true) {
+            FocusController.openPage.value = true
+            return
+        }
         if (intent == null || !intent.hasExtra(WidgetOpen.Date)) return
         val date = LocalDate.ofEpochDay(intent.getLongExtra(WidgetOpen.Date, LocalDate.now().toEpochDay()))
         Agenda.init(this)
@@ -98,5 +104,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Notion has no push: a return to the app is the moment to look again.
         Agenda.refresh()
+        // Catch the session up, or ask how long it ran if it was cut off.
+        FocusController.reconcile(this)
     }
 }

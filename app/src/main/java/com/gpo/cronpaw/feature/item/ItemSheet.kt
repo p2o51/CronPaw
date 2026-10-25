@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -56,6 +57,11 @@ import com.gpo.cronpaw.core.agenda.Actions
 import com.gpo.cronpaw.core.agenda.Agenda
 import com.gpo.cronpaw.core.agenda.AgendaItem
 import com.gpo.cronpaw.core.agenda.Pins
+import com.gpo.cronpaw.core.focus.FocusController
+import com.gpo.cronpaw.core.focus.FocusStore
+import com.gpo.cronpaw.R
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import com.gpo.cronpaw.core.agenda.Source
 import com.gpo.cronpaw.core.notion.NotionRepo
 import com.gpo.cronpaw.core.notion.PropValue
@@ -85,6 +91,7 @@ fun ItemSheet(item: AgendaItem, onDismiss: () -> Unit) {
     val dbs by NotionRepo.databases.collectAsState()
     val calendars by Agenda.calendars.collectAsState()
     val items by Agenda.items.collectAsState()
+    val focus by FocusStore.session.collectAsState()
     // Follow the live item (a ticked todo, a reload) while the sheet is open.
     val live = items.firstOrNull { it.key == item.key } ?: item
     val notion = live.source as? Source.Notion
@@ -166,27 +173,41 @@ fun ItemSheet(item: AgendaItem, onDismiss: () -> Unit) {
             // What you do with it, right under it: one row of pills in one colour family,
             // ⋯ and delete at the end (delete asks twice).
             Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                val pinned = live.key in pins
-                PillAction(if (pinned) CronSymbols.PinFilled else CronSymbols.Pin, if (pinned) "已置顶" else "置顶", on = pinned) {
-                    haptics.tick(); Pins.toggle(live.key)
-                }
-                val cal = live.source as? Source.Calendar
-                if (notion != null && notion.url.isNotEmpty()) {
-                    PillAction(YoinSymbols.Launch, "在 Notion 打开", on = false) {
-                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(notion.url))) }
+                // The pills scroll when they don't fit a phone's width; ⋯ and delete stay put.
+                Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // 专注 comes first, filled: the reason to open an item right before doing it.
+                    if (!live.allDay) {
+                        val running = focus != null
+                        PillAction(ImageVector.vectorResource(R.drawable.ic_focus), if (running) "专注中" else "专注", on = true) {
+                            haptics.tick()
+                            scope.launch {
+                                runCatching { sheet.hide() }
+                                onDismiss()
+                                if (running) FocusController.openPage.value = true else FocusController.asked.value = live
+                            }
+                        }
                     }
-                } else if (cal != null && cal.eventId > 0) {
-                    PillAction(YoinSymbols.Launch, "在日历打开", on = false) {
-                        runCatching {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, cal.eventId))
-                                    .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, live.start)
-                                    .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, live.end),
-                            )
+                    val pinned = live.key in pins
+                    PillAction(if (pinned) CronSymbols.PinFilled else CronSymbols.Pin, if (pinned) "已置顶" else "置顶", on = pinned) {
+                        haptics.tick(); Pins.toggle(live.key)
+                    }
+                    val cal = live.source as? Source.Calendar
+                    if (notion != null && notion.url.isNotEmpty()) {
+                        PillAction(YoinSymbols.Launch, "在 Notion 打开", on = false) {
+                            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(notion.url))) }
+                        }
+                    } else if (cal != null && cal.eventId > 0) {
+                        PillAction(YoinSymbols.Launch, "在日历打开", on = false) {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, cal.eventId))
+                                        .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, live.start)
+                                        .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, live.end),
+                                )
+                            }
                         }
                     }
                 }
-                Spacer(Modifier.weight(1f))
                 if (db != null) {
                     IconButton(onClick = { haptics.tick(); showAll = !showAll }) {
                         Icon(YoinSymbols.MoreHorizontal, "显示哪些属性", tint = if (showAll) cs.primary else cs.onSurfaceVariant)

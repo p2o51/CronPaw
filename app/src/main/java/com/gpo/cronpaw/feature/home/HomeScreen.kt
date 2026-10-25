@@ -97,6 +97,10 @@ import com.gpo.cronpaw.ui.components.rememberToast
 import com.gpo.cronpaw.ui.theme.CronSymbols
 import com.gpo.cronpaw.ui.theme.YoinMotion
 import com.gpo.cronpaw.ui.theme.rememberRichHaptics
+import com.gpo.cronpaw.core.focus.FocusController
+import com.gpo.cronpaw.feature.focus.RecoverySheet
+import com.gpo.cronpaw.feature.focus.StartFocusSheet
+import com.gpo.cronpaw.feature.focus.rememberRecovery
 import com.gpo.cronpaw.ui.time.Times
 import com.gpo.yoin.symbols.YoinSymbols
 import kotlinx.coroutines.delay
@@ -415,7 +419,7 @@ fun HomeScreen(nav: Nav) {
                     onSearch = { nav.push("search") },
                 )
                 Box(Modifier.animateContentSize(YoinMotion.defaultSpatialSpec())) {
-                    TopCard(items, onOpenAll = { showUpcoming = true }, modifier = Modifier.padding(bottom = 8.dp))
+                    TopCard(items, onOpenAll = { showUpcoming = true }, onOpenFocus = { nav.push("focus") }, modifier = Modifier.padding(bottom = 8.dp))
                 }
                 if (!hasCalendar) {
                     Row(
@@ -593,6 +597,13 @@ fun HomeScreen(nav: Nav) {
     else ModalNavigationDrawer(drawerContent, drawerState = drawer, gesturesEnabled = drawer.isOpen) { body() }
 
     selected?.let { ItemSheet(it, onDismiss = { selected = null }) }
+    val askedFocus by FocusController.asked.collectAsState()
+    askedFocus?.let { item ->
+        StartFocusSheet(item, onStart = { nav.push("focus") }, onDismiss = { FocusController.asked.value = null })
+    }
+    rememberRecovery()?.let { s ->
+        RecoverySheet(s, onOpenFocus = { nav.push("focus") }, onDismiss = { FocusController.dismissRecovery() })
+    }
     if (showUpcoming) {
         AllUpcomingSheet(items, onItem = { showUpcoming = false; selected = it }, onDismiss = { showUpcoming = false })
     }

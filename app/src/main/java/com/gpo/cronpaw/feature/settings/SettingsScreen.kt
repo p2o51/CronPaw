@@ -59,6 +59,12 @@ import com.gpo.cronpaw.core.agenda.Agenda
 import com.gpo.cronpaw.core.notion.NotionOAuth
 import com.gpo.cronpaw.core.notion.NotionRepo
 import com.gpo.cronpaw.core.settings.AppSettings
+import com.gpo.cronpaw.core.focus.FocusSettings
+import com.gpo.cronpaw.core.focus.FocusZen
+import com.gpo.cronpaw.R
+import androidx.compose.ui.res.vectorResource
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import com.gpo.cronpaw.navigation.Nav
 import com.gpo.cronpaw.ui.components.PawTopBar
 import com.gpo.cronpaw.ui.components.rememberToast
@@ -86,6 +92,14 @@ fun SettingsScreen(nav: Nav) {
     val quick by AppSettings.quickEntries.state.collectAsState()
     val autoSave by AppSettings.autoSaveSeconds.state.collectAsState()
     val defaultMinutes by AppSettings.defaultMinutes.state.collectAsState()
+    val focusMin by FocusSettings.focusMin.state.collectAsState()
+    val breakMin by FocusSettings.breakMin.state.collectAsState()
+    val longBreakMin by FocusSettings.longBreakMin.state.collectAsState()
+    val breath by FocusSettings.breath.state.collectAsState()
+    val quietInBreaks by FocusSettings.quietInBreaks.state.collectAsState()
+    // Coming back from the system's access page: look again.
+    val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val zenAccess = remember(lifecycle) { FocusZen.hasAccess(context) }
     val themeMode by AppSettings.themeMode.state.collectAsState()
     val dynamic by AppSettings.dynamicColor.state.collectAsState()
     val workspace by AppSettings.notionWorkspace.state.collectAsState()
@@ -196,6 +210,41 @@ fun SettingsScreen(nav: Nav) {
                     Field("ElevenLabs API key", elevenKey, { AppSettings.set(AppSettings.elevenLabsKey, it.trim()) }, secret = true)
                     Hint("空着就用系统语音识别。填了就用 Scribe，按用量向 ElevenLabs 付费。")
                     if (elevenKey.isNotBlank()) Field("模型", model, { AppSettings.set(AppSettings.scribeModel, it.trim()) })
+                }
+            }
+
+            // ── 专注: the 番茄 rhythm, the breath, CronPaw's own mode ──
+            GroupTitle("专注")
+            Card {
+                val tomato = ImageVector.vectorResource(R.drawable.ic_focus)
+                ListRow(tomato, "一轮专注", "分钟") {
+                    InlineChoices(listOf(15, 20, 25, 30, 45, 50).map { it to it.toString() }, focusMin) {
+                        haptics.tick(); AppSettings.set(FocusSettings.focusMin, it)
+                    }
+                }
+                ListRow(YoinSymbols.Sleep, "休息", "分钟") {
+                    InlineChoices(listOf(3, 5, 10).map { it to it.toString() }, breakMin) {
+                        haptics.tick(); AppSettings.set(FocusSettings.breakMin, it)
+                    }
+                }
+                ListRow(YoinSymbols.Sleep, "长休息", "每 4 轮一次，分钟") {
+                    InlineChoices(listOf(10, 15, 20, 30).map { it to it.toString() }, longBreakMin) {
+                        haptics.tick(); AppSettings.set(FocusSettings.longBreakMin, it)
+                    }
+                }
+                ListRow(YoinSymbols.Sparkle, "开始前深呼吸", "约 7 秒，点一下跳过") {
+                    Switch(breath, { haptics.tick(); AppSettings.set(FocusSettings.breath, it) })
+                }
+                ListRow(CronSymbols.Bell, "专注模式", if (zenAccess) "谁能打扰，在系统的模式设置里改" else "要先允许 CronPaw 管理勿扰", onClick = {
+                    haptics.tick()
+                    val intent = if (zenAccess) FocusZen.settingsIntent(context) ?: FocusZen.accessIntent() else FocusZen.accessIntent()
+                    runCatching { context.startActivity(intent) }
+                }) {
+                    Text(if (zenAccess) "已允许" else "去允许", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    Icon(YoinSymbols.ChevronRight, null, tint = cs.onSurfaceVariant)
+                }
+                ListRow(YoinSymbols.Sleep, "休息时也开专注模式") {
+                    Switch(quietInBreaks, { haptics.tick(); AppSettings.set(FocusSettings.quietInBreaks, it) })
                 }
             }
 

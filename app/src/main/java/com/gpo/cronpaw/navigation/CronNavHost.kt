@@ -16,6 +16,12 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import com.gpo.cronpaw.core.focus.FocusController
+import com.gpo.cronpaw.core.focus.FocusStore
+import com.gpo.cronpaw.feature.focus.FocusScreen
 import com.gpo.cronpaw.feature.home.HomeScreen
 import com.gpo.cronpaw.feature.search.SearchScreen
 import com.gpo.cronpaw.feature.settings.DatabaseSetupScreen
@@ -23,7 +29,7 @@ import com.gpo.cronpaw.feature.settings.SettingsScreen
 import com.gpo.cronpaw.ui.theme.LocalYoinMotionRole
 import com.gpo.cronpaw.ui.theme.YoinMotion
 
-/** Four pages, so a plain stack of strings: "home", "search", "settings", "db:<id>" ("db:" = pick a new one). */
+/** Five pages, so a plain stack of strings: "home", "search", "settings", "focus", "db:<id>" ("db:" = pick a new one). */
 class Nav(private val stack: MutableList<String>) {
     val top: String get() = stack.last()
     val depth: Int get() = stack.size
@@ -38,6 +44,15 @@ fun CronNavHost() {
     }
     val nav = remember(stack) { Nav(stack) }
     BackHandler(enabled = stack.size > 1) { nav.pop() }
+    val openFocus by FocusController.openPage.collectAsState()
+    LaunchedEffect(openFocus) {
+        if (!openFocus) return@LaunchedEffect
+        FocusController.openPage.value = false
+        if (FocusStore.value != null || FocusController.pending.value != null) {
+            stack.removeAll { it == "focus" }
+            nav.push("focus")
+        }
+    }
     val motionRole = LocalYoinMotionRole.current
     val motionScheme = MaterialTheme.motionScheme
     // Home stays composed underneath, so the timeline keeps its place and scroll.
@@ -54,6 +69,7 @@ fun CronNavHost() {
             when {
                 route == "search" -> SearchScreen(nav)
                 route == "settings" -> SettingsScreen(nav)
+                route == "focus" -> FocusScreen(nav)
                 route.startsWith("db:") -> DatabaseSetupScreen(nav, route.removePrefix("db:").ifEmpty { null })
                 else -> Box(Modifier.fillMaxSize())
             }

@@ -54,6 +54,21 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.gpo.cronpaw.core.agenda.AgendaItem
 import com.gpo.cronpaw.core.agenda.Pins
+import com.gpo.cronpaw.core.focus.FocusController
+import com.gpo.cronpaw.core.focus.FocusMode
+import com.gpo.cronpaw.core.focus.FocusSession
+import com.gpo.cronpaw.core.focus.FocusSettings
+import com.gpo.cronpaw.core.focus.FocusStore
+import com.gpo.cronpaw.core.focus.FocusZen
+import com.gpo.cronpaw.core.focus.Phase
+import com.gpo.cronpaw.core.focus.advance
+import com.gpo.cronpaw.core.focus.breakColor
+import com.gpo.yoin.symbols.YoinSymbols
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.platform.LocalContext
 import com.gpo.cronpaw.ui.theme.CronSymbols
 import com.gpo.cronpaw.ui.theme.LocalYoinMotionRole
 import com.gpo.cronpaw.ui.theme.YoinMotion
@@ -102,8 +117,12 @@ fun whenLabel(item: AgendaItem, now: Long): Pair<String, String> {
 fun TopCard(
     items: List<AgendaItem>,
     onOpenAll: () -> Unit,
+    onOpenFocus: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // While a session runs the card is the timer and stays put.
+    val focus by FocusStore.session.collectAsState()
+    focus?.let { FocusCard(it, onOpenFocus, modifier); return }
     val pins by Pins.keys.collectAsState()
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -199,6 +218,20 @@ fun TopCard(
                     Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     if (label.isNotEmpty()) Text(label, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
                 }
+                // In progress: start focusing on it the way it was done last time.
+                if (!item.allDay && item.start <= now && item.end > now) {
+                    val context = LocalContext.current
+                    Spacer(Modifier.width(12.dp))
+                    Box(
+                        Modifier.size(40.dp).clip(CircleShape).background(cs.primary).clickable {
+                            haptics.tick()
+                            val mode = runCatching { FocusMode.valueOf(FocusSettings.lastMode.value) }.getOrDefault(FocusMode.Pomodoro)
+                            FocusController.plan(item, mode, FocusSettings.quiet.value && FocusZen.hasAccess(context))
+                            onOpenFocus()
+                        },
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(YoinSymbols.PlayFilled, "专注", Modifier.size(20.dp), tint = cs.onPrimary) }
+                }
             }
         }
         if (cards.size > 1) {
@@ -213,6 +246,57 @@ fun TopCard(
                     )
                 }
             }
+        }
+    }
+}
+
+/** The running session: its label, the item, the clock; the card fills with the item's colour as it goes. */
+@Composable
+private fun FocusCard(s: FocusSession, onOpen: () -> Unit, modifier: Modifier) {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) { now = System.currentTimeMillis(); delay(1000L - now % 1000L) }
+        }
+    }
+    val cur = advance(s, now)
+    val cs = MaterialTheme.colorScheme
+    val fill by animateFloatAsState(cur.progress(now), spring(dampingRatio = 1f, stiffness = 50f), label = "fill")
+    val color = Color(if (cur.phase == Phase.Break || cur.phase == Phase.Waiting) breakColor(cur.color) else cur.color)
+    Row(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(cs.surfaceContainerHigh)
+            .drawBehind { drawRect(color.copy(alpha = 0.28f), size = Size(size.width * fill, size.height)) }
+            .clickable(onClick = onOpen)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(10.dp, 34.dp).clip(RoundedCornerShape(5.dp)).background(Color(cur.color)))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            val label = when {
+                cur.paused -> "已暂停"
+                cur.phase == Phase.Break -> "休息"
+                cur.phase == Phase.Waiting -> "休息好了"
+                cur.phase == Phase.Done -> "专注完成"
+                cur.mode == FocusMode.Free -> "专注"
+                cur.rounds > 1 -> "专注 第 ${cur.round + 1} 轮"
+                else -> "专注"
+            }
+            Text(label, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            Text(cur.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        val ms = if (cur.mode == FocusMode.Free) cur.focused(now) else cur.remaining(now) + 999
+        val sec = ms / 1000
+        val text = if (sec >= 3600) "${sec / 3600}:${(sec % 3600 / 60).toString().padStart(2, '0')}:${(sec % 60).toString().padStart(2, '0')}"
+        else "${(sec / 60).toString().padStart(2, '0')}:${(sec % 60).toString().padStart(2, '0')}"
+        Column(horizontalAlignment = Alignment.End) {
+            Text(text, style = MaterialTheme.typography.titleLarge.copy(fontFeatureSettings = "tnum"), fontWeight = FontWeight.Bold)
+            Text(if (cur.mode == FocusMode.Free) "已专注" else "剩余", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
     }
 }

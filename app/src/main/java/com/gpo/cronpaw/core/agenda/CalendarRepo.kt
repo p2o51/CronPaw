@@ -235,6 +235,32 @@ object CalendarRepo {
         }.getOrDefault(false)
     }
 
+    /**
+     * New times for one occurrence. A repeating event gets an exception for that occurrence
+     * ([originalBegin] = the instance's BEGIN), so the rest of the series stays where it was.
+     */
+    suspend fun updateInstanceTimes(context: Context, eventId: Long, originalBegin: Long, start: Long, end: Long): Boolean = withContext(Dispatchers.IO) {
+        if (!canWrite(context)) return@withContext false
+        val repeats = runCatching {
+            context.contentResolver.query(
+                ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId),
+                arrayOf(CalendarContract.Events.RRULE, CalendarContract.Events.RDATE), null, null, null,
+            )?.use { c -> c.moveToFirst() && (!c.getString(0).isNullOrBlank() || !c.getString(1).isNullOrBlank()) } ?: false
+        }.getOrDefault(false)
+        if (!repeats) return@withContext updateTimes(context, eventId, start, end)
+        val values = ContentValues().apply {
+            put(CalendarContract.Events.ORIGINAL_INSTANCE_TIME, originalBegin)
+            put(CalendarContract.Events.DTSTART, start)
+            put(CalendarContract.Events.DTEND, end)
+            put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
+        }
+        runCatching {
+            context.contentResolver.insert(
+                ContentUris.withAppendedId(CalendarContract.Events.CONTENT_EXCEPTION_URI, eventId), values,
+            ) != null
+        }.getOrDefault(false)
+    }
+
     suspend fun setTitle(context: Context, eventId: Long, title: String): Boolean = withContext(Dispatchers.IO) {
         if (!canWrite(context)) return@withContext false
         val values = ContentValues().apply { put(CalendarContract.Events.TITLE, title) }
