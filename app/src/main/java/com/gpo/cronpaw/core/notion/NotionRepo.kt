@@ -263,6 +263,24 @@ object NotionRepo {
         }
     }
 
+    /** One plain line at the end of the page's body: [text] as a paragraph. */
+    suspend fun appendLine(pageId: String, text: String) {
+        NotionClient.appendBlocks(pageId, buildJsonArray {
+            add(buildJsonObject {
+                put("object", "block")
+                put("type", "paragraph")
+                put("paragraph", buildJsonObject {
+                    put("rich_text", buildJsonArray {
+                        add(buildJsonObject {
+                            put("type", "text")
+                            put("text", buildJsonObject { put("content", text) })
+                        })
+                    })
+                })
+            })
+        })
+    }
+
     suspend fun setTimes(db: NotionDb, pageId: String, start: Long, end: Long, allDay: Boolean) {
         val page = NotionClient.updatePage(pageId, buildJsonObject {
             put(db.dateProp, buildJsonObject { put("date", dateJson(start, end, allDay)) })

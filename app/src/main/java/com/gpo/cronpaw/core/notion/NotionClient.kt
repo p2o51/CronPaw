@@ -157,6 +157,10 @@ object NotionClient {
     suspend fun updatePage(pageId: String, properties: JsonObject): JsonObject =
         call("PATCH", "/pages/$pageId", buildJsonObject { put("properties", properties) })
 
+    /** Adds [children] (block objects) at the end of a page's body. */
+    suspend fun appendBlocks(pageId: String, children: JsonArray): JsonObject =
+        call("PATCH", "/blocks/$pageId/children", buildJsonObject { put("children", children) })
+
     suspend fun archivePage(pageId: String): JsonObject =
         call("PATCH", "/pages/$pageId", buildJsonObject { put("archived", true) })
 
