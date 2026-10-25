@@ -158,7 +158,7 @@ object FocusController {
         // The timeline keeps the item's own times unless they were just rewritten.
         if (done) ok = Actions.setDone(if (rewrites) item!!.copy(start = cur.startedAt, end = end) else item!!, true) && ok
         FocusLog.add(context, cur, end, if (rewrites) "saved" else "kept", done, recovered = endAt != null)
-        // A Notion item also gets a line in its own page, for 51 to read there. Best effort: a
+        // A Notion item also gets a line in its own page, readable there. Best effort: a
         // failure here doesn't undo the save, and the local log has the same session.
         val src = cur.source
         if (src is Source.Notion && src.pageId.isNotEmpty() && end - cur.startedAt >= 60_000L) {
