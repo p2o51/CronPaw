@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
 import android.os.Build
+import android.os.Bundle
 import com.gpo.cronpaw.MainActivity
 import com.gpo.cronpaw.R
 
@@ -116,7 +117,8 @@ object FocusNotifier {
 
     @Suppress("NewApi")
     private fun live(b: Notification.Builder, s: FocusSession, now: Long) {
-        b.setRequestPromotedOngoing(true)
+        // setRequestPromotedOngoing is API 36.1; compileSdk is 36, so set its extra directly.
+        b.addExtras(Bundle().apply { putBoolean("android.requestPromotedOngoing", true) })
         when {
             s.paused -> b.setShortCriticalText("暂停")
             s.phase == Phase.Waiting -> b.setShortCriticalText("休息好了")
