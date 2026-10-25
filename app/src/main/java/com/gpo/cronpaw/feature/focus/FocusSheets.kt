@@ -218,7 +218,7 @@ fun RecoverySheet(s: FocusSession, onOpenFocus: () -> Unit, onDismiss: () -> Uni
     val picked = choices[pickedIndex.coerceIn(0, choices.lastIndex)].second
     var nudge by remember { mutableFloatStateOf(0f) }
     val end = (picked + (nudge.roundToInt() * 5) * 60_000L).coerceIn(minOf(s.startedAt + 60_000L, now), now)
-    val minutes = ((end - s.startedAt) / 60_000L).toInt()
+    val minutes = ((end - s.startedAt + 30_000L) / 60_000L).toInt()
     val finish: (suspend () -> Unit) -> Unit = { block -> root.launch { block() }; local.launch { runCatching { sheet.hide() }; onDismiss() } }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = cs.surfaceContainerLow) {

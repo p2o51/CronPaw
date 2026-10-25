@@ -743,7 +743,7 @@ private fun EndPage(s: FocusSession, endAt: Long, tones: FocusTones, onLeave: ()
     val haptics = rememberRichHaptics()
     var rewrite by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
-    val minutes = ((endAt - s.startedAt) / 60_000L).toInt()
+    val minutes = ((endAt - s.startedAt + 30_000L) / 60_000L).toInt()
     val save: (Boolean) -> Unit = { done ->
         if (!saving) {
             saving = true
@@ -756,6 +756,7 @@ private fun EndPage(s: FocusSession, endAt: Long, tones: FocusTones, onLeave: ()
     }
     BoxWithConstraints(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         val wide = maxWidth > maxHeight && (maxWidth >= 600.dp || maxHeight < 480.dp)
+        val endScale = deskScale(maxWidth.value)
         val tomatoSize = if (wide) minOf(maxHeight * 0.6f, 320.dp) else minOf(maxWidth * 0.5f, 240.dp)
         val tomato: @Composable () -> Unit = {
             Box(contentAlignment = Alignment.Center) {
@@ -802,7 +803,7 @@ private fun EndPage(s: FocusSession, endAt: Long, tones: FocusTones, onLeave: ()
         if (wide) {
             Row(Modifier.fillMaxSize().padding(horizontal = 32.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { tomato() }
-                Box(Modifier.weight(1f)) { details() }
+                Box(Modifier.weight(1f)) { Scaled(endScale) { details() } }
             }
         } else {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
