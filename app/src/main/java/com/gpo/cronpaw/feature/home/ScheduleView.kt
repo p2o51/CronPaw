@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.gpo.cronpaw.core.agenda.Agenda
 import com.gpo.cronpaw.core.agenda.AgendaItem
+import com.gpo.cronpaw.core.agenda.itemsByDay
 import com.gpo.cronpaw.ui.time.Times
 import java.time.LocalDate
 import java.time.YearMonth
@@ -54,15 +55,7 @@ sealed interface ScheduleRow {
 fun scheduleRows(items: List<AgendaItem>, today: LocalDate = LocalDate.now()): List<ScheduleRow> {
     val from = today.minusDays(ScheduleBack)
     val to = today.plusDays(ScheduleAhead)
-    val byDay = HashMap<LocalDate, MutableList<AgendaItem>>()
-    for (item in items) {
-        var d = maxOf(Times.date(item.start), from)
-        val last = minOf(Times.date(max(item.start, item.end - 1)), to)
-        while (!d.isAfter(last)) {
-            byDay.getOrPut(d) { mutableListOf() } += item
-            d = d.plusDays(1)
-        }
-    }
+    val byDay = itemsByDay(items, from, to)
     // Days with something, and today even when empty, so 「今天」 always has a place.
     val days = (byDay.keys + today).filter { !it.isBefore(from) && !it.isAfter(to) }.sorted()
     val out = mutableListOf<ScheduleRow>()
@@ -102,7 +95,7 @@ fun ScheduleView(
     val cs = MaterialTheme.colorScheme
     val now = remember { System.currentTimeMillis() }
     LazyColumn(modifier.seamViewport(list), state = list, contentPadding = PaddingValues(start = 8.dp, end = 12.dp, bottom = 120.dp)) {
-        items(rows, key = { it.key }) { row ->
+        items(rows, key = { it.key }, contentType = { if (it is ScheduleRow.Month) "month" else "day" }) { row ->
             when (row) {
                 is ScheduleRow.Month -> Text(
                     if (row.month.year != LocalDate.now().year) "${row.month.year}年${row.month.monthValue}月" else "${row.month.monthValue}月",

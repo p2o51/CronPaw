@@ -5,7 +5,6 @@ import com.gpo.cronpaw.core.agenda.Agenda
 import com.gpo.cronpaw.core.agenda.Pins
 import com.gpo.cronpaw.core.notion.NotionRepo
 import com.gpo.cronpaw.core.settings.AppSettings
-import com.gpo.cronpaw.widget.CalendarChangeJob
 import com.gpo.cronpaw.widget.WidgetSync
 
 class CronPawApp : Application() {
@@ -17,6 +16,5 @@ class CronPawApp : Application() {
         Pins.init()
         Agenda.init(this)
         WidgetSync.init(this)
-        CalendarChangeJob.schedule(this)
     }
 }

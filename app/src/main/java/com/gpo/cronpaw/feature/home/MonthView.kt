@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gpo.cronpaw.core.agenda.Agenda
 import com.gpo.cronpaw.core.agenda.AgendaItem
+import com.gpo.cronpaw.core.agenda.itemsByDay
 import com.gpo.cronpaw.ui.time.Times
 import java.time.LocalDate
 import java.time.YearMonth
@@ -67,19 +68,6 @@ fun MonthView(
             Agenda.ensure(start, start.plusDays(41))
         }
     }
-    val byDay = remember(items) {
-        val out = HashMap<LocalDate, MutableList<AgendaItem>>()
-        for (item in items) {
-            var d = Times.date(item.start)
-            val last = Times.date(max(item.start, item.end - 1))
-            var guard = 0
-            while (!d.isAfter(last) && guard++ < 62) {
-                out.getOrPut(d) { mutableListOf() } += item
-                d = d.plusDays(1)
-            }
-        }
-        out.mapValues { (_, v) -> v.sortedWith(compareBy({ !it.allDay }, { it.start })) }
-    }
     val cs = MaterialTheme.colorScheme
     Column(modifier) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp)) {
@@ -90,6 +78,10 @@ fun MonthView(
         HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
             val month = monthOf(page)
             val start = gridStart(month)
+            val byDay = remember(items, start) {
+                itemsByDay(items, start, start.plusDays(41))
+                    .mapValues { (_, v) -> v.sortedWith(compareBy({ !it.allDay }, { it.start })) }
+            }
             Column(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 for (week in 0 until 6) {
                     Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(3.dp)) {

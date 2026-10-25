@@ -3,6 +3,8 @@ package com.gpo.cronpaw
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -85,8 +87,11 @@ class MainActivity : ComponentActivity() {
         if (intent == null || !intent.hasExtra(WidgetOpen.Date)) return
         val date = LocalDate.ofEpochDay(intent.getLongExtra(WidgetOpen.Date, LocalDate.now().toEpochDay()))
         Agenda.init(this)
-        val item = intent.getStringExtra(WidgetOpen.Item)?.let { key -> Agenda.items.value.firstOrNull { it.key == key } }
-        HomeRequests.jump.value = HomeRequests.Jump(date, open = item)
+        lifecycleScope.launch {
+            Agenda.awaitReady()
+            val item = intent.getStringExtra(WidgetOpen.Item)?.let { key -> Agenda.items.value.firstOrNull { it.key == key } }
+            HomeRequests.jump.value = HomeRequests.Jump(date, open = item)
+        }
     }
 
     override fun onResume() {

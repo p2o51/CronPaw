@@ -34,6 +34,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -106,32 +110,6 @@ object DateQuery {
     }
 }
 
-object Fuzzy {
-    /** 0 = no match. Every space-separated part must match; whole substrings rank above scattered letters. */
-    fun score(title: String, query: String): Int {
-        val t = title.lowercase()
-        val parts = query.lowercase().split(' ').filter { it.isNotBlank() }
-        if (parts.isEmpty()) return 0
-        var total = 0
-        for (p in parts) {
-            val s = when {
-                t.startsWith(p) -> 100
-                t.contains(p) -> 80
-                subsequence(t, p) -> 30
-                else -> return 0
-            }
-            total += s
-        }
-        return total
-    }
-
-    private fun subsequence(t: String, p: String): Boolean {
-        var i = 0
-        for (c in t) if (i < p.length && c == p[i]) i++
-        return i == p.length
-    }
-}
-
 @Composable
 fun SearchScreen(nav: Nav) {
     val cs = MaterialTheme.colorScheme
@@ -146,15 +124,12 @@ fun SearchScreen(nav: Nav) {
     }
     val ranges = remember(query, days) { DateQuery.candidates(query, days) }
     val now = remember { System.currentTimeMillis() }
-    val results = remember(query, items) {
-        if (query.isBlank()) emptyList()
-        else items.asSequence()
-            .map { it to Fuzzy.score(it.title, query) }
-            .filter { it.second > 0 }
-            .sortedWith(compareByDescending<Pair<AgendaItem, Int>> { it.second }.thenBy { kotlin.math.abs(it.first.start - now) })
-            .map { it.first }
-            .take(60)
-            .toList()
+    val results by produceState<List<AgendaItem>>(emptyList(), query, items) {
+        if (query.isBlank()) value = emptyList()
+        else {
+            delay(100)
+            value = withContext(Dispatchers.Default) { Fuzzy.search(items, query, now) }
+        }
     }
 
     Column(Modifier.fillMaxSize().background(cs.surface).statusBarsPadding().imePadding()) {

@@ -51,6 +51,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.State
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.constrainHeight
+import kotlin.math.roundToInt
+import com.gpo.cronpaw.core.agenda.itemsByDay
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -81,6 +88,9 @@ import com.gpo.cronpaw.core.agenda.AgendaItem
 import com.gpo.cronpaw.ui.theme.YoinMotion
 import com.gpo.cronpaw.ui.time.Times
 import com.gpo.yoin.symbols.YoinSymbols
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import java.time.LocalDate
 import kotlin.math.max
@@ -118,10 +128,13 @@ fun Timeline(
     state.hourPx = with(density) { state.hourDp.toPx() }
     // Minute ticks so the now line moves.
     val now = remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(30_000)
-            now.longValue = System.currentTimeMillis()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                now.longValue = System.currentTimeMillis()
+                delay(30_000)
+            }
         }
     }
     LaunchedEffect(state.pager) {
@@ -134,7 +147,6 @@ fun Timeline(
         state.wantMinute = null
     }
 
-    val byDay = remember(items) { items.groupByDays() }
 
     Column(modifier) {
         // Each header page reports its natural height; the header follows the finger from
@@ -159,7 +171,12 @@ fun Timeline(
         Row(
             Modifier
                 .fillMaxWidth()
-                .then(if (headerHeight.value > 0f) Modifier.height(with(density) { headerHeight.value.toDp() }) else Modifier)
+                .layout { measurable, constraints ->
+                    val height = headerHeight.value.roundToInt()
+                    val bounded = if (height > 0) constraints.constrainHeight(height) else 0
+                    val child = measurable.measure(if (height > 0) constraints.copy(minHeight = bounded, maxHeight = bounded) else constraints)
+                    layout(child.width, child.height) { child.placeRelative(0, 0) }
+                }
                 .clipToBounds(),
         ) {
             Spacer(Modifier.width(Gutter))
@@ -171,6 +188,11 @@ fun Timeline(
                 verticalAlignment = Alignment.Top,
             ) { page ->
                 val first = state.firstDay(page)
+                val days = state.days
+                val byDay = remember(items, first, days) {
+                    itemsByDay(items.filter { it.allDay }, first, first.plusDays(days - 1L))
+                }
+                DisposableEffect(page, pageHeights) { onDispose { pageHeights.remove(page) } }
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -179,7 +201,7 @@ fun Timeline(
                 ) {
                     for (i in 0 until state.days) {
                         val day = first.plusDays(i.toLong())
-                        DayHeader(day, byDay[day].orEmpty().filter { it.allDay }, onItem, Modifier.weight(1f))
+                        DayHeader(day, byDay[day].orEmpty(), onItem, Modifier.weight(1f))
                     }
                 }
             }
@@ -201,6 +223,10 @@ fun Timeline(
                     key = { it },
                 ) { page ->
                     val first = state.firstDay(page)
+                    val days = state.days
+                    val byDay = remember(items, first, days) {
+                        itemsByDay(items.filter { !it.allDay }, first, first.plusDays(days - 1L))
+                    }
                     Row(
                         Modifier
                             .fillMaxSize()
@@ -215,8 +241,8 @@ fun Timeline(
                             val day = first.plusDays(i.toLong())
                             DayColumn(
                                 day = day,
-                                items = byDay[day].orEmpty().filter { !it.allDay },
-                                now = now.longValue,
+                                items = byDay[day].orEmpty(),
+                                now = now,
                                 ghost = state.ghost?.takeIf { Times.date(it.start) == day },
                                 hourDp = state.hourDp,
                                 onItem = onItem,
@@ -232,21 +258,6 @@ fun Timeline(
             }
         }
     }
-}
-
-/** Items by every local day they touch (a 2-day event shows on both). */
-private fun List<AgendaItem>.groupByDays(): Map<LocalDate, List<AgendaItem>> {
-    val out = HashMap<LocalDate, MutableList<AgendaItem>>()
-    for (item in this) {
-        var d = Times.date(item.start)
-        val last = Times.date(max(item.start, item.end - 1))
-        var guard = 0
-        while (!d.isAfter(last) && guard++ < 62) {
-            out.getOrPut(d) { mutableListOf() } += item
-            d = d.plusDays(1)
-        }
-    }
-    return out
 }
 
 @Composable
@@ -359,7 +370,7 @@ private fun place(items: List<AgendaItem>, day: LocalDate): List<Placed> {
 private fun DayColumn(
     day: LocalDate,
     items: List<AgendaItem>,
-    now: Long,
+    now: State<Long>,
     ghost: Ghost?,
     hourDp: Dp,
     onItem: (AgendaItem) -> Unit,
@@ -391,7 +402,7 @@ private fun DayColumn(
         },
     ) {
         val w = maxWidth
-        for (p in placed) {
+        for (p in placed) key(p.item.key) {
             val colW = w / p.cols
             ItemBlock(
                 item = p.item,
@@ -414,9 +425,11 @@ private fun DayColumn(
             GhostBlock(ghost, Modifier.offset(y = y).fillMaxWidth().height(hourDp * (ghost.minutes / 60f)))
         }
         if (today) {
-            val m = Times.minuteOfDay(now)
-            Box(Modifier.offset(y = hourDp * (m / 60f) - 1.dp).fillMaxWidth().height(2.dp).background(cs.primary))
-            Box(Modifier.offset(x = (-4).dp, y = hourDp * (m / 60f) - 4.dp).size(8.dp).clip(CircleShape).background(cs.primary))
+            Box(Modifier.fillMaxSize().drawBehind {
+                val y = hourDp.toPx() * Times.minuteOfDay(now.value) / 60f
+                drawRect(cs.primary, Offset(0f, y - 1.dp.toPx()), Size(size.width, 2.dp.toPx()))
+                drawCircle(cs.primary, 4.dp.toPx(), Offset(0f, y))
+            })
         }
     }
 }
@@ -470,6 +483,7 @@ private fun ItemBlock(
     }
     var coords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
     val currentMover by rememberUpdatedState(mover)
+    val currentItem by rememberUpdatedState(item)
     Row(
         modifier
             .seamGraphic()
@@ -478,7 +492,7 @@ private fun ItemBlock(
                 detectDragGesturesAfterLongPress(
                     onDragStart = { pos ->
                         val c = coords ?: return@detectDragGesturesAfterLongPress
-                        currentMover?.start(item, c.localToRoot(pos), pos.y)
+                        currentMover?.start(currentItem, c.localToRoot(pos), pos.y)
                     },
                     onDrag = { change, _ ->
                         change.consume()

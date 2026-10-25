@@ -6,6 +6,8 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
 import android.database.ContentObserver
+import android.os.CancellationSignal
+import kotlinx.coroutines.suspendCancellableCoroutine
 import android.os.Handler
 import android.os.Looper
 import android.provider.CalendarContract
@@ -32,8 +34,8 @@ object CalendarRepo {
     fun canWrite(context: Context): Boolean =
         context.checkSelfPermission(Manifest.permission.WRITE_CALENDAR) == PackageManager.PERMISSION_GRANTED
 
-    suspend fun calendars(context: Context): List<CalendarInfo> = withContext(Dispatchers.IO) {
-        if (!hasPermission(context)) return@withContext emptyList()
+    suspend fun calendars(context: Context): List<CalendarInfo> = readProvider { signal ->
+        if (!hasPermission(context)) return@readProvider emptyList()
         val projection = arrayOf(
             CalendarContract.Calendars._ID,
             CalendarContract.Calendars.ACCOUNT_NAME,
@@ -48,6 +50,7 @@ object CalendarRepo {
                 CalendarContract.Calendars.CONTENT_URI, projection,
                 "${CalendarContract.Calendars.SYNC_EVENTS} = 1", null,
                 "${CalendarContract.Calendars.ACCOUNT_NAME} ASC, ${CalendarContract.Calendars.IS_PRIMARY} DESC, ${CalendarContract.Calendars.CALENDAR_DISPLAY_NAME} ASC",
+                signal,
             )?.use { c ->
                 while (c.moveToNext()) {
                     out += CalendarInfo(
@@ -71,8 +74,8 @@ object CalendarRepo {
         to: Long,
         calendars: Map<Long, CalendarInfo>,
         hidden: Set<Long>,
-    ): List<AgendaItem> = withContext(Dispatchers.IO) {
-        if (!hasPermission(context)) return@withContext emptyList()
+    ): List<AgendaItem> = readProvider { signal ->
+        if (!hasPermission(context)) return@readProvider emptyList()
         val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().also {
             ContentUris.appendId(it, from)
             ContentUris.appendId(it, to)
@@ -90,8 +93,9 @@ object CalendarRepo {
         val zone = ZoneId.systemDefault()
         val out = mutableListOf<AgendaItem>()
         runCatching {
-            context.contentResolver.query(uri, projection, null, null, "${CalendarContract.Instances.BEGIN} ASC")?.use { c ->
+            context.contentResolver.query(uri, projection, null, null, "${CalendarContract.Instances.BEGIN} ASC", signal)?.use { c ->
                 while (c.moveToNext()) {
+                    signal.throwIfCanceled()
                     val calId = c.getLong(6)
                     if (calId in hidden || calId !in calendars) continue
                     val allDay = c.getInt(4) == 1
@@ -117,6 +121,14 @@ object CalendarRepo {
             }
         }
         out
+    }
+
+    private suspend fun <T> readProvider(read: (CancellationSignal) -> T): T = withContext(Dispatchers.IO) {
+        suspendCancellableCoroutine { continuation ->
+            val signal = CancellationSignal()
+            continuation.invokeOnCancellation { signal.cancel() }
+            continuation.resumeWith(runCatching { read(signal) })
+        }
     }
 
     private fun utcMidnightToLocal(utc: Long, zone: ZoneId): Long {

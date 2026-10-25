@@ -25,7 +25,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -39,12 +42,17 @@ import java.util.concurrent.TimeUnit
  */
 object WidgetSync {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val updateLock = Mutex()
+    private var initialized = false
     private const val Periodic = "agenda_widget_refresh"
 
     @OptIn(FlowPreview::class)
     fun init(context: Context) {
+        if (initialized) return
+        initialized = true
         val app = context.applicationContext
         scope.launch {
+            if (widgets.any { placed(app, it.first) }) schedule(app) else cancel(app)
             AgendaEvents.version.debounce(600).collect { update(app) }
         }
     }
@@ -57,16 +65,18 @@ object WidgetSync {
     )
 
     private suspend fun placed(context: Context, type: Class<out GlanceAppWidget>): Boolean =
-        runCatching { GlanceAppWidgetManager(context).getGlanceIds(type) }.getOrDefault(emptyList()).isNotEmpty()
+        com.gpo.cronpaw.core.concurrent.suspendResult { GlanceAppWidgetManager(context).getGlanceIds(type) }.getOrDefault(emptyList()).isNotEmpty()
 
-    suspend fun update(context: Context) {
-        var any = false
-        for ((type, make) in widgets) {
-            if (!placed(context, type)) continue
-            any = true
-            runCatching { make().updateAll(context) }
+    suspend fun update(context: Context) = updateLock.withLock {
+        Agenda.awaitReady()
+        val active = widgets.filter { placed(context, it.first) }
+        if (active.none { it.first == MonthGlance::class.java }) Agenda.clearWidgetWindow()
+        for ((_, make) in active) {
+            com.gpo.cronpaw.core.concurrent.suspendResult { make().updateAll(context) }
         }
-        if (any) WidgetTick.arm(context, countdown = placed(context, NextGlance::class.java))
+        if (active.isNotEmpty()) WidgetTick.arm(context, countdown = active.any { it.first == NextGlance::class.java })
+        else WidgetTick.cancel(context)
+        active.isNotEmpty()
     }
 
     /** One kind of widget is gone; stop the background refresh once none is left. */
@@ -86,14 +96,15 @@ object WidgetSync {
 
     fun cancel(context: Context) {
         WorkManager.getInstance(context).cancelUniqueWork(Periodic)
+        CalendarChangeJob.cancel(context)
+        WidgetTick.cancel(context)
     }
 }
 
 class WidgetRefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         Agenda.init(applicationContext)
-        Agenda.refresh()
-        delay(4_000) // Notion's answer, usually
+        Agenda.refreshAndAwait()
         WidgetSync.update(applicationContext)
         return Result.success()
     }
@@ -105,22 +116,41 @@ class WidgetRefreshWorker(context: Context, params: WorkerParameters) : Coroutin
  */
 class CalendarChangeJob : JobService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var job: Job? = null
 
     override fun onStartJob(params: JobParameters): Boolean {
-        scope.launch {
-            Agenda.init(applicationContext)
-            Agenda.reloadCalendars()
-            WidgetSync.update(applicationContext)
-            schedule(applicationContext)
-            jobFinished(params, false)
+        job = scope.launch {
+            try {
+                Agenda.init(applicationContext)
+                Agenda.reloadCalendars(force = true)
+                if (WidgetSync.update(applicationContext)) schedule(applicationContext)
+                else cancel(applicationContext)
+                jobFinished(params, false)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                jobFinished(params, true)
+            }
         }
         return true
     }
 
-    override fun onStopJob(params: JobParameters): Boolean = true
+    override fun onStopJob(params: JobParameters): Boolean {
+        job?.cancel()
+        return true
+    }
+
+    override fun onDestroy() {
+        scope.cancel()
+        super.onDestroy()
+    }
 
     companion object {
         private const val Id = 4107
+
+        fun cancel(context: Context) {
+            context.getSystemService(JobScheduler::class.java)?.cancel(Id)
+        }
 
         fun schedule(context: Context) {
             val js = context.getSystemService(JobScheduler::class.java) ?: return
@@ -151,6 +181,15 @@ class WidgetTick : BroadcastReceiver() {
     }
 
     companion object {
+        fun cancel(context: Context) {
+            val intent = PendingIntent.getBroadcast(
+                context, 0, Intent(context, WidgetTick::class.java),
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+            ) ?: return
+            context.getSystemService(AlarmManager::class.java)?.cancel(intent)
+            intent.cancel()
+        }
+
         /** [countdown]: a 下一个 widget is placed, whose 「40 分钟后」 moves on in five-minute steps. */
         fun arm(context: Context, countdown: Boolean = false) {
             val now = System.currentTimeMillis()

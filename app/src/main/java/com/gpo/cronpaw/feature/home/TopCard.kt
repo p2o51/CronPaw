@@ -61,6 +61,9 @@ import com.gpo.cronpaw.ui.theme.rememberRichHaptics
 import com.gpo.cronpaw.ui.time.Times
 import java.time.LocalDate
 import kotlin.math.abs
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -103,15 +106,20 @@ fun TopCard(
 ) {
     val pins by Pins.keys.collectAsState()
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) { delay(20_000); now = System.currentTimeMillis() }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) { now = System.currentTimeMillis(); delay(20_000) }
+        }
     }
     val cards = topCandidates(items, pins, now)
     var index by remember { mutableIntStateOf(0) }
-    LaunchedEffect(cards.size) {
-        while (cards.size > 1) {
-            delay(5_000)
-            index = (index + 1) % cards.size
+    LaunchedEffect(cards.size, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (cards.size > 1) {
+                delay(5_000)
+                index = (index + 1) % cards.size
+            }
         }
     }
     if (cards.isEmpty()) return
