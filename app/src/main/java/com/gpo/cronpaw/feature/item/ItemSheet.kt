@@ -148,7 +148,7 @@ fun ItemSheet(item: AgendaItem, onDismiss: () -> Unit) {
                         Row(verticalAlignment = Alignment.Bottom) {
                             Text(Times.hm(live.start), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = heroInk)
                             Text(
-                                "到 ${Times.hm(live.end)} · ${Times.durationText(live.durationMinutes)}",
+                                "–${Times.hm(live.end)}   ${Times.durationText(live.durationMinutes)}",
                                 Modifier.padding(start = 8.dp, bottom = 7.dp),
                                 style = MaterialTheme.typography.labelLarge,
                                 color = heroInk.copy(alpha = 0.75f),
