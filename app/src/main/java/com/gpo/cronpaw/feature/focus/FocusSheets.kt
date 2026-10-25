@@ -215,7 +215,7 @@ fun RecoverySheet(s: FocusSession, onOpenFocus: () -> Unit, onDismiss: () -> Uni
     )
     var picked by remember { mutableStateOf(choices.first().second) }
     var nudge by remember { mutableFloatStateOf(0f) }
-    val end = (picked + (nudge.roundToInt() * 5) * 60_000L).coerceIn(s.startedAt + 60_000L, now)
+    val end = (picked + (nudge.roundToInt() * 5) * 60_000L).coerceIn(minOf(s.startedAt + 60_000L, now), now)
     val minutes = ((end - s.startedAt) / 60_000L).toInt()
     val finish: (suspend () -> Unit) -> Unit = { block -> root.launch { block() }; local.launch { runCatching { sheet.hide() }; onDismiss() } }
 
