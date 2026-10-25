@@ -31,7 +31,6 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.max
-import kotlin.math.pow
 import kotlin.math.sin
 
 /**
@@ -94,7 +93,7 @@ fun Tomato(
         withTransform({
             translate((size.width - 226f * s) / 2f, (size.height - 226f * s) / 2f)
             scale(s, s, pivot = Offset.Zero)
-            scale(pop.value, pop.value, pivot = Offset(Cx, Cy))
+            scale(pop.value, pop.value, pivot = Offset(Cx, 134f))
         }) {
             drawTomato(if (full) 1f else 0.04f + 0.92f * shownLevel, t, amp, sepals, spin.value, tones, full)
         }
@@ -102,39 +101,45 @@ fun Tomato(
 }
 
 private const val Cx = 113f
-private const val Cy = 132f
-private const val Rx = 92f
-private const val Ry = 72f
+private const val Top = 62f
+private const val Bottom = 206f
 
-private fun bodyPath(ph: Float): Path {
-    val p = Path()
-    val n = 120
+/** The outline's anchors (a 226 box), mirrored; a closed Catmull-Rom curve through them. */
+private val Anchors: List<Offset> = run {
+    val half = listOf(Offset(113f, 72f), Offset(156f, 62f), Offset(196f, 82f), Offset(210f, 128f), Offset(190f, 180f), Offset(140f, 204f), Offset(113f, 206f))
+    half + half.subList(1, half.size - 1).reversed().map { Offset(226f - it.x, it.y) }
+}
+
+private val Body: Path = Path().apply {
+    val n = Anchors.size
+    moveTo(Anchors[0].x, Anchors[0].y)
     for (i in 0 until n) {
-        val a = i / n.toFloat() * 2f * PI.toFloat()
-        val up = max(0f, -sin(a))
-        val k = 0.035f * (0.5f - 0.5f * cos(5f * a + ph * 0.15f)) + 0.16f * up.pow(6)
-        val x = Cx + Rx * (1 - k) * cos(a)
-        val y = Cy + Ry * (1 - k) * sin(a)
-        if (i == 0) p.moveTo(x, y) else p.lineTo(x, y)
+        val p0 = Anchors[(i - 1 + n) % n]
+        val p1 = Anchors[i]
+        val p2 = Anchors[(i + 1) % n]
+        val p3 = Anchors[(i + 2) % n]
+        cubicTo(
+            p1.x + (p2.x - p0.x) / 6f, p1.y + (p2.y - p0.y) / 6f,
+            p2.x - (p3.x - p1.x) / 6f, p2.y - (p3.y - p1.y) / 6f,
+            p2.x, p2.y,
+        )
     }
-    p.close()
-    return p
+    close()
 }
 
 private fun wavePath(level: Float, t: Float, amp: Float, freq: Float, off: Float, closed: Boolean): Path {
-    val top = Cy + Ry
-    val y = top - 2 * Ry * level
+    val y = Bottom - (Bottom - Top) * level
     val p = Path()
-    var x = Cx - Rx - 10f
+    var x = 6f
     var first = true
-    while (x <= Cx + Rx + 10f) {
-        val yy = y + sin(x / (2 * Rx) * freq * PI.toFloat() + t + off) * amp
+    while (x <= 220f) {
+        val yy = y + sin(x / 204f * freq * PI.toFloat() + t + off) * amp
         if (first) { p.moveTo(x, yy); first = false } else p.lineTo(x, yy)
         x += 3f
     }
     if (closed) {
-        p.lineTo(Cx + Rx + 10f, top + 10f)
-        p.lineTo(Cx - Rx - 10f, top + 10f)
+        p.lineTo(220f, Bottom + 10f)
+        p.lineTo(6f, Bottom + 10f)
         p.close()
     }
     return p
@@ -143,17 +148,17 @@ private fun wavePath(level: Float, t: Float, amp: Float, freq: Float, off: Float
 /** Five leaves fanning out from the top; [open] 0 folds them in. */
 private fun sepalPath(open: Float, sway: Float): Path {
     val ox = Cx
-    val oy = Cy - Ry + 16f
+    val oy = 74f
     val p = Path()
     for (i in 0 until 5) {
         val side = abs(i - 2)
         val base = ((-90f + (i - 2) * (30f + 18f * open) + sway) * PI / 180f).toFloat()
         val len = 36f + 14f * open - (if (side == 2) 6f else 0f)
-        val w = 11f
+        val w = 15f
         val tx = ox + len * cos(base)
         val ty = oy + len * sin(base) * 0.45f + side * 9f * open
         val nx = -sin(base) * w
-        val ny = cos(base) * w * 0.55f
+        val ny = cos(base) * w * 0.8f
         p.moveTo(ox, oy)
         p.quadraticTo((ox + tx) / 2 + nx, (oy + ty) / 2 + ny, tx, ty)
         p.quadraticTo((ox + tx) / 2 - nx, (oy + ty) / 2 - ny, ox, oy)
@@ -163,18 +168,21 @@ private fun sepalPath(open: Float, sway: Float): Path {
 }
 
 private fun DrawScope.drawTomato(level: Float, t: Float, amp: Float, open: Float, spin: Float, tones: FocusTones, full: Boolean) {
-    val body = bodyPath(t)
-    drawPath(body, if (full) tones.bright else tones.deeper)
-    if (!full) clipPath(body) {
-        val a = 5f * amp
-        drawPath(wavePath(level, t * 0.8f, a * 0.8f, 3f, 1.4f, true), tones.deeper.copy(alpha = 0.9f))
-        drawPath(wavePath(level - 0.015f, t, a, 4f, 0f, true), tones.deep)
-        drawPath(wavePath(level - 0.015f, t, a, 4f, 0f, false), tones.bright, style = Stroke(3f, cap = StrokeCap.Round))
+    drawPath(Body, if (full) tones.bright else tones.deeper)
+    if (!full) {
+        clipPath(Body) {
+            val a = 5f * amp
+            drawPath(wavePath(level, t * 0.8f, a * 0.8f, 3f, 1.4f, true), tones.deep.copy(alpha = 0.55f))
+            drawPath(wavePath(level - 0.015f, t, a, 4f, 0f, true), tones.deep)
+            drawPath(wavePath(level - 0.015f, t, a, 4f, 0f, false), tones.bright, style = Stroke(3f, cap = StrokeCap.Round))
+        }
+        // A faint rim, so an empty tomato still reads as one on black.
+        drawPath(Body, tones.bright.copy(alpha = 0.22f), style = Stroke(2f))
     }
-    withTransform({ rotate(spin, pivot = Offset(Cx, Cy - Ry + 16f)) }) {
+    drawRoundRect(tones.leaf, topLeft = Offset(108.5f, 46f), size = Size(9f, 30f), cornerRadius = CornerRadius(4.5f))
+    withTransform({ rotate(spin, pivot = Offset(Cx, 74f)) }) {
         drawPath(sepalPath(open, sin(t) * 3f), tones.leaf)
     }
-    drawRoundRect(tones.leaf, topLeft = Offset(108f, 40f), size = Size(10f, 22f), cornerRadius = CornerRadius(5f))
 }
 
 /** A small tomato for the harvest row: filled when that round is done. */

@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -314,12 +315,13 @@ private fun FocusPage(s0: FocusSession, onLeave: () -> Unit) {
                                 Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
                                     pill(Modifier)
                                     Spacer(Modifier.height(24.dp))
-                                    Clock(s, now, big = true)
+                                    // The desk clock: as large as the right half allows.
+                                    Clock(s, now, minOf(maxWidth.value * 0.13f, maxHeight.value * 0.26f, 220f).coerceAtLeast(84f).sp)
                                     Title(s, focusTones, chrome)
                                     Spacer(Modifier.height(16.dp))
                                     Harvest(s, now, focusTones, Arrangement.Start)
                                     Spacer(Modifier.height(28.dp))
-                                    Controls(s, now, tones, focusTones, chrome, onEnd = { ending = s.actualEnd(System.currentTimeMillis()) })
+                                    Controls(s, now, tones, focusTones, chrome, onEnd = { ending = s.actualEnd(System.currentTimeMillis()) }, wide = true)
                                 }
                             }
                         } else {
@@ -332,7 +334,7 @@ private fun FocusPage(s0: FocusSession, onLeave: () -> Unit) {
                                         Spacer(Modifier.height(8.dp))
                                         Harvest(s, now, focusTones, Arrangement.Center)
                                         Spacer(Modifier.height(20.dp))
-                                        Clock(s, now, big = false)
+                                        Clock(s, now, 84.sp)
                                         Title(s, focusTones, chrome)
                                     }
                                 }
@@ -449,11 +451,11 @@ private fun clockText(s: FocusSession, now: Long): String = when {
 }
 
 @Composable
-private fun Clock(s: FocusSession, now: Long, big: Boolean) {
+private fun Clock(s: FocusSession, now: Long, size: androidx.compose.ui.unit.TextUnit) {
     val color by animateColorAsState(if (s.paused) Dimmer else ClockGrey, spring(stiffness = 200f), label = "clock")
     Text(
         clockText(s, now),
-        style = TextStyle(fontFamily = ThinFlex, fontWeight = FontWeight.ExtraLight, fontSize = if (big) 128.sp else 84.sp, fontFeatureSettings = "tnum", letterSpacing = (-1).sp),
+        style = TextStyle(fontFamily = ThinFlex, fontWeight = FontWeight.ExtraLight, fontSize = size, fontFeatureSettings = "tnum", letterSpacing = (-1).sp),
         color = color,
         maxLines = 1,
     )
@@ -495,14 +497,17 @@ private fun Harvest(s: FocusSession, now: Long, tones: FocusTones, arrangement: 
 }
 
 @Composable
-private fun Controls(s: FocusSession, now: Long, tones: FocusTones, focusTones: FocusTones, chrome: Float, onEnd: () -> Unit) {
+private fun Controls(s: FocusSession, now: Long, tones: FocusTones, focusTones: FocusTones, chrome: Float, onEnd: () -> Unit, wide: Boolean = false) {
     val context = LocalContext.current
     val haptics = rememberRichHaptics()
     val enabled = chrome > 0.5f
     Row(Modifier.graphicsLayer { alpha = chrome }, horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
         val canPlus = s.mode == FocusMode.Pomodoro && s.phase == Phase.Focus
-        DarkButton(if (s.mode == FocusMode.Free) "" else "+5 分", enabled = enabled && canPlus, modifier = Modifier.width(88.dp)) {
-            haptics.tick(); FocusController.plusFive(context)
+        // 自由 has no +5 分; on a phone its place stays empty so the main button stays centred.
+        if (s.mode == FocusMode.Pomodoro || !wide) {
+            DarkButton(if (s.mode == FocusMode.Free) "" else "+5 分", enabled = enabled && canPlus, modifier = Modifier.width(88.dp)) {
+                haptics.tick(); FocusController.plusFive(context)
+            }
         }
         // The one filled button: a circle while running, a pill when it waits for you.
         val waiting = s.phase == Phase.Waiting
@@ -604,7 +609,10 @@ private fun TodayPage(s: FocusSession, now: Long, today: Today, tones: FocusTone
             .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp)
-            .padding(bottom = 32.dp),
+            .padding(bottom = 32.dp)
+            // A reading column on a tablet, not a strip across the whole screen.
+            .wrapContentWidth(Alignment.CenterHorizontally)
+            .widthIn(max = 600.dp),
     ) {
         Row(Modifier.fillMaxWidth().padding(top = 4.dp).group(0), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onClose, modifier = Modifier.offset(x = (-12).dp)) { Icon(YoinSymbols.Back, "回到专注", tint = Dim) }

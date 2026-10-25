@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.runtime.Composable
@@ -65,6 +66,7 @@ fun BreathOverlay(
 ) {
     val density = LocalDensity.current
     val navBottom = with(density) { WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding().toPx() }
+    val statusTop = with(density) { WindowInsets.statusBars.asPaddingValues().calculateTopPadding().toPx() }
     val measurer = rememberTextMeasurer()
     val latestDone by rememberUpdatedState(onDone)
     val wordStyle = TextStyle(fontSize = 28.sp, fontWeight = FontWeight.Medium, letterSpacing = .18.em)
@@ -131,7 +133,7 @@ fun BreathOverlay(
                 drawText(word, color = tones.leaf, topLeft = Offset(state.breathCenter.x - word.size.width / 2f, state.breathCenter.y - word.size.height / 2f), alpha = state.wordAlpha)
             }
             if (state.hintAlpha > 0f) {
-                drawText(skipText, color = Color(0xFF8A8A8A), topLeft = Offset((size.width - skipText.size.width) / 2f, g.dp * 30f), alpha = state.hintAlpha)
+                drawText(skipText, color = Color(0xFF8A8A8A), topLeft = Offset((size.width - skipText.size.width) / 2f, statusTop + g.dp * 8f), alpha = state.hintAlpha)
             }
         }
     }

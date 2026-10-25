@@ -205,7 +205,8 @@ fun RecoverySheet(s: FocusSession, onOpenFocus: () -> Unit, onDismiss: () -> Uni
         if (s.mode == FocusMode.Pomodoro) {
             var m = 0
             for (r in 0 until s.rounds) m += s.focusLenMin(r) + if (r < s.rounds - 1) s.breakLenMin(r) else 0
-            (s.startedAt + m * 60_000L).coerceAtMost(now)
+            // Only a guess of its own when the plan would have ended before now.
+            (s.startedAt + m * 60_000L).takeIf { it < now - 60_000L }
         } else null
     }
     val choices = listOfNotNull(
@@ -213,7 +214,8 @@ fun RecoverySheet(s: FocusSession, onOpenFocus: () -> Unit, onDismiss: () -> Uni
         "最后一次用" to s.lastSeen.coerceIn(s.startedAt, now),
         "现在" to now,
     )
-    var picked by remember { mutableStateOf(choices.first().second) }
+    var pickedIndex by remember { mutableStateOf(0) }
+    val picked = choices[pickedIndex.coerceIn(0, choices.lastIndex)].second
     var nudge by remember { mutableFloatStateOf(0f) }
     val end = (picked + (nudge.roundToInt() * 5) * 60_000L).coerceIn(minOf(s.startedAt + 60_000L, now), now)
     val minutes = ((end - s.startedAt) / 60_000L).toInt()
@@ -235,12 +237,12 @@ fun RecoverySheet(s: FocusSession, onOpenFocus: () -> Unit, onDismiss: () -> Uni
             Spacer(Modifier.height(16.dp))
             Label("结束在")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                choices.forEach { (label, at) ->
-                    val on = picked == at
+                choices.forEachIndexed { i, (label, _) ->
+                    val on = i == pickedIndex
                     val bg by animateColorAsState(if (on) cs.primary else cs.surfaceContainerHighest, YoinMotion.defaultEffectsSpec(), label = "end")
                     Text(
                         label,
-                        Modifier.clip(CircleShape).background(bg).clickable { haptics.tick(); picked = at; nudge = 0f }.padding(horizontal = 14.dp, vertical = 8.dp),
+                        Modifier.clip(CircleShape).background(bg).clickable { haptics.tick(); pickedIndex = i; nudge = 0f }.padding(horizontal = 14.dp, vertical = 8.dp),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = if (on) cs.onPrimary else cs.onSurfaceVariant,
