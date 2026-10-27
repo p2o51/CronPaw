@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 今天 (widget/AgendaWidget, Glance). Re-rendered when the agenda changes in the app, when the
-     calendar provider changes (CalendarChangeJob, a content-trigger job) and every 30 minutes
+     calendar provider changes (CalendarChangeJob, a content-trigger job) and every 15 minutes
      (WidgetRefreshWorker), so the system's own update period is off. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_agenda_description"

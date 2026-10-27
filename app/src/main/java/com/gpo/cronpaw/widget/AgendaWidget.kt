@@ -39,6 +39,8 @@ import com.gpo.cronpaw.core.agenda.Agenda
 import com.gpo.cronpaw.core.agenda.AgendaItem
 import com.gpo.cronpaw.ui.time.Times
 import java.time.LocalDate
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class AgendaWidget : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = AgendaGlance()
@@ -164,6 +166,9 @@ class ToggleDone : ActionCallback {
         Agenda.init(context)
         Agenda.awaitReady()
         val item = Agenda.items.value.firstOrNull { it.key == key } ?: return
+        // Redraw with the tick first, then write to Notion: the circle answers the tap at once.
+        withContext(Dispatchers.Main) { Agenda.applyLocal(item.copy(done = !item.done)) }
+        WidgetSync.update(context)
         Actions.setDone(item, !item.done)
         WidgetSync.update(context)
     }

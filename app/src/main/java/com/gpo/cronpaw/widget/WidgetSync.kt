@@ -38,7 +38,7 @@ import java.util.concurrent.TimeUnit
 /**
  * Keeps 今天 current — the thing Notion Calendar's widget gets wrong. Three triggers:
  * the app's own agenda changing, the calendar provider changing (even with the app
- * closed: [CalendarChangeJob]), and a 30-minute tick for the clock and Notion.
+ * closed: [CalendarChangeJob]), and a 15-minute tick for the clock and Notion.
  */
 object WidgetSync {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -88,8 +88,9 @@ object WidgetSync {
     fun schedule(context: Context) {
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             Periodic,
-            ExistingPeriodicWorkPolicy.KEEP,
-            PeriodicWorkRequestBuilder<WidgetRefreshWorker>(30, TimeUnit.MINUTES).build(),
+            // UPDATE so a phone still on the old 30-minute period moves to 15 (the system minimum).
+            ExistingPeriodicWorkPolicy.UPDATE,
+            PeriodicWorkRequestBuilder<WidgetRefreshWorker>(15, TimeUnit.MINUTES).build(),
         )
         CalendarChangeJob.schedule(context)
     }
