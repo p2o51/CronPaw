@@ -14,8 +14,8 @@ android {
         applicationId = "com.gpo.cronpaw"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "0.4.1"
+        versionCode = 15
+        versionName = "0.4.2"
         // Notion OAuth goes through 51's relay Worker (notion-oauth-relay, app key "cronpaw"):
         // it holds the integration's client secret. Override with notion.oauth.relay in local.properties.
         val localProps = Properties().apply {

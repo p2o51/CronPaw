@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Launcher icon A and the splash behind it. API 31+ swaps these for the
-         wallpaper palette (values-v31), so the icon follows Material You. -->
-    <color name="icon_bg">#FFFFE3D3</color>
-    <color name="icon_pad">#FF9A4525</color>
-    <color name="icon_toe">#FF00696A</color>
+    <!-- The icon, splash and 日期 widget in 柿子: one persimmon hue, fixed (not the wallpaper's),
+         so the icon reads as CronPaw on any home screen. -->
+    <color name="icon_bg">#FFFFE9DD</color>
+    <color name="icon_pad">#FFE2582F</color>
+    <color name="icon_toe">#FFF59E7A</color>
+    <color name="icon_ink">#FFFFF6F0</color>
     <!-- What shows under Compose before its first frame and during resizes. -->
     <color name="window_background">#FFFFF8F6</color>
 </resources>

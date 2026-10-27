@@ -62,6 +62,7 @@ object WidgetSync {
         AgendaGlance::class.java to { AgendaGlance() },
         NextGlance::class.java to { NextGlance() },
         MonthGlance::class.java to { MonthGlance() },
+        DateGlance::class.java to { DateGlance() },
     )
 
     private suspend fun placed(context: Context, type: Class<out GlanceAppWidget>): Boolean =

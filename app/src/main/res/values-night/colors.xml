@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="icon_bg">#FF3A2418</color>
-    <color name="icon_pad">#FFFFB59A</color>
-    <color name="icon_toe">#FF80D4D4</color>
+    <color name="icon_bg">#FF3B1E14</color>
+    <color name="icon_pad">#FFFF9A72</color>
+    <color name="icon_toe">#FFC9583A</color>
+    <color name="icon_ink">#FF3B1E14</color>
     <color name="window_background">#FF1A1110</color>
 </resources>

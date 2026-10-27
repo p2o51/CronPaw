@@ -88,6 +88,19 @@
                 android:resource="@xml/widget_next_info" />
         </receiver>
 
+        <!-- 日期 home-screen widget (widget/DateWidget). -->
+        <receiver
+            android:name=".widget.DateWidget"
+            android:exported="true"
+            android:label="@string/widget_date_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_date_info" />
+        </receiver>
+
         <!-- 本月 home-screen widget (widget/MonthWidget). -->
         <receiver
             android:name=".widget.MonthWidget"

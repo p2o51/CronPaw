@@ -15,6 +15,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import com.gpo.cronpaw.widget.AgendaWidget
 import com.gpo.cronpaw.widget.MonthWidget
+import com.gpo.cronpaw.widget.DateWidget
 import com.gpo.cronpaw.widget.NextWidget
 import com.gpo.cronpaw.widget.WidgetSync
 import kotlinx.coroutines.MainScope
@@ -31,6 +32,7 @@ class WidgetGallery : Activity() {
     private val specs = listOf(
         Triple(AgendaWidget::class.java, "今天 · 2×2", 180 to 200),
         Triple(AgendaWidget::class.java, "今天 · 4×2", 370 to 200),
+        Triple(DateWidget::class.java, "日期 · 1×1", 80 to 80),
         Triple(NextWidget::class.java, "下一个 · 2×1", 180 to 80),
         Triple(NextWidget::class.java, "下一个 · 2×2", 180 to 180),
         Triple(MonthWidget::class.java, "本月 · 4×3", 370 to 300),

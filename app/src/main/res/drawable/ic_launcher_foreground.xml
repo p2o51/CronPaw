@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Icon A, 双色爪印: bean-shaped main pad in the icon's primary, four parted toes in its tertiary.
-     Launchers show the middle 72 of these 108 units, so the paw spans about 56% of the visible icon,
-     as on the icon page. It sits well inside the 66dp safe zone and doubles as the splash icon. -->
+<!-- The CronPaw icon: a paw whose pad is a calendar page with a date on it. Four toes ride the
+     pad's outline at an even spacing, leaning outward (scratchpad geometry, see ic_paw_mark).
+     The date is Google Sans Flex Bold, the app's own face, as paths: launchers can't draw text,
+     and a launcher icon can't change with the day anyway. The splash rolls it to today. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="@color/icon_pad"
-        android:pathData="M54,51.93C64.08,51.93 66,60.39 65.04,65.47C64.08,70.36 59.28,71.11 56.88,69.61C55.2,68.48 52.8,68.48 51.12,69.61C48.72,71.11 43.92,70.36 42.96,65.47C42,60.39 43.92,51.93 54,51.93Z" />
     <path android:fillColor="@color/icon_toe"
-        android:pathData="M34.29,51.57A4.2,5.2 -28 1,1 41.71,47.63A4.2,5.2 -28 1,1 34.29,51.57ZM43.65,41.49A4.4,5.6 -9 1,1 52.35,40.11A4.4,5.6 -9 1,1 43.65,41.49ZM55.65,40.11A4.4,5.6 9 1,1 64.35,41.49A4.4,5.6 9 1,1 55.65,40.11ZM66.29,47.63A4.2,5.2 28 1,1 73.71,51.57A4.2,5.2 28 1,1 66.29,47.63Z" />
+        android:pathData="M38.49,51.63A3.78,4.31 -32.31 1,1 33.88,44.34A3.78,4.31 -32.31 1,1 38.49,51.63ZM48.25,46.1A4.2,4.79 -11.32 1,1 46.37,36.71A4.2,4.79 -11.32 1,1 48.25,46.1ZM59.75,46.1A4.2,4.79 11.32 1,1 61.63,36.71A4.2,4.79 11.32 1,1 59.75,46.1ZM69.51,51.63A3.78,4.31 32.31 1,1 74.12,44.34A3.78,4.31 32.31 1,1 69.51,51.63Z" />
+    <path android:fillColor="@color/icon_pad"
+        android:pathData="M54,48C66,48 70,52 70,61C70,69 66,74 60,74C57.5,74 56,72.6 54,72.6C52,72.6 50.5,74 48,74C42,74 38,69 38,61C38,52 42,48 54,48Z" />
+    <path android:fillColor="@color/icon_ink"
+        android:pathData="M50.43 67.78Q49.38 67.78 48.63 67.45Q47.89 67.12 47.38 66.58Q46.86 66.03 46.41 64.86Q46.41 64.86 46.41 64.86Q46.41 64.86 46.41 64.86L48.56 64.07Q48.56 64.07 48.56 64.07Q48.56 64.07 48.56 64.07Q48.8 64.63 49.03 64.93Q49.26 65.24 49.58 65.42Q49.9 65.61 50.38 65.61Q51.14 65.61 51.59 65.16Q52.05 64.7 52.05 64.04Q52.05 63.32 51.56 62.9Q51.07 62.48 50.31 62.48H49.16Q49.16 62.48 49.16 62.48Q49.16 62.48 49.16 62.48V60.68Q49.16 60.68 49.16 60.68Q49.16 60.68 49.16 60.68H50.19Q50.87 60.68 51.31 60.29Q51.74 59.91 51.74 59.26Q51.74 58.66 51.35 58.29Q50.96 57.92 50.3 57.92Q49.88 57.92 49.59 58.07Q49.3 58.22 49.07 58.46Q48.85 58.7 48.54 59.22Q48.54 59.22 48.54 59.22Q48.54 59.22 48.54 59.22L46.69 58.11Q46.69 58.11 46.69 58.11Q46.69 58.11 46.69 58.11Q47.29 57.15 47.8 56.7Q48.32 56.26 48.98 56.01Q49.65 55.76 50.54 55.76Q52.2 55.76 53.2 56.6Q54.19 57.43 54.19 58.79Q54.19 59.7 53.76 60.36Q53.34 61.03 52.56 61.32V61.38Q53.5 61.68 54.04 62.43Q54.58 63.19 54.58 64.24Q54.58 65.78 53.46 66.78Q52.34 67.78 50.43 67.78ZM58.19 67.5Q58.19 67.5 58.19 67.5Q58.19 67.5 58.19 67.5V59.2L56.78 60.22Q56.78 60.22 56.78 60.22Q56.78 60.22 56.78 60.22L55.4 58.59Q55.4 58.59 55.4 58.59Q55.4 58.59 55.4 58.59L59.02 56.04Q59.02 56.04 59.02 56.04Q59.02 56.04 59.02 56.04H60.72Q60.72 56.04 60.72 56.04Q60.72 56.04 60.72 56.04V67.5Q60.72 67.5 60.72 67.5Q60.72 67.5 60.72 67.5Z" />
 </vector>

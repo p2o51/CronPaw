@@ -94,6 +94,8 @@ import com.gpo.cronpaw.navigation.Nav
 import com.gpo.cronpaw.ui.components.LocalSnackbarHost
 import com.gpo.cronpaw.ui.components.LocalToastScope
 import com.gpo.cronpaw.ui.components.rememberToast
+import com.gpo.cronpaw.ui.launch.launchDateSlot
+import com.gpo.cronpaw.ui.launch.launchReveal
 import com.gpo.cronpaw.ui.theme.CronSymbols
 import com.gpo.cronpaw.ui.theme.YoinMotion
 import com.gpo.cronpaw.ui.theme.rememberRichHaptics
@@ -418,7 +420,7 @@ fun HomeScreen(nav: Nav) {
                     },
                     onSearch = { nav.push("search") },
                 )
-                Box(Modifier.animateContentSize(YoinMotion.defaultSpatialSpec())) {
+                Box(Modifier.launchReveal().animateContentSize(YoinMotion.defaultSpatialSpec())) {
                     TopCard(items, onOpenAll = { showUpcoming = true }, onOpenFocus = { nav.push("focus") }, modifier = Modifier.padding(bottom = 8.dp))
                 }
                 if (!hasCalendar) {
@@ -443,6 +445,7 @@ fun HomeScreen(nav: Nav) {
                 }
                 val viewModifier = Modifier
                     .weight(1f)
+                    .launchReveal()
                     .graphicsLayer {
                         alpha = viewIn.value
                         val s = 0.94f + 0.06f * viewIn.value
@@ -662,12 +665,16 @@ private fun Header(first: LocalDate, last: LocalDate, showRange: Boolean, onMenu
         IconButton(onClick = onSearch) { Icon(YoinSymbols.Search, "搜索") }
         // Today's date; tap → back to today.
         val onToday0 = today in first..last
+        val container = if (onToday0) cs.surfaceContainerHigh else cs.primary
+        val content = if (onToday0) cs.onSurface else cs.onPrimary
         Box(
             Modifier
                 .padding(end = 8.dp)
                 .size(40.dp)
+                // Where the launch's date lands.
+                .launchDateSlot(container, content)
                 .clip(RoundedCornerShape(12.dp))
-                .background(if (onToday0) cs.surfaceContainerHigh else cs.primary)
+                .background(container)
                 .clickable(onClick = onToday),
             contentAlignment = Alignment.Center,
         ) {
@@ -675,7 +682,7 @@ private fun Header(first: LocalDate, last: LocalDate, showRange: Boolean, onMenu
                 today.dayOfMonth.toString(),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = if (onToday0) cs.onSurface else cs.onPrimary,
+                color = content,
             )
         }
     }
