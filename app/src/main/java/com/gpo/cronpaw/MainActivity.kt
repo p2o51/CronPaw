@@ -95,14 +95,15 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * The splash stays until Compose has laid out its first frame (at most [MaxHoldMs]), then hands
+     * The splash stays until Compose has laid out its first frame (at most the icon's length), then hands
      * over to [LaunchHandoff]: from the launcher the date flies into the header's 今天 button; off a
      * widget, notification or link it just fades; with animations off, or on a recreated activity,
      * it is simply gone.
      */
     private fun installHandoff(splash: SplashScreen, savedInstanceState: Bundle?) {
         val created = SystemClock.uptimeMillis()
-        splash.setKeepOnScreenCondition { !firstLayout && SystemClock.uptimeMillis() - created < MaxHoldMs }
+        val maxHold = resources.getInteger(R.integer.splash_icon_duration).toLong()
+        splash.setKeepOnScreenCondition { !firstLayout && SystemClock.uptimeMillis() - created < maxHold }
         val launched = intent
         val fromLauncher = savedInstanceState == null &&
             launched?.action == Intent.ACTION_MAIN &&
@@ -117,24 +118,39 @@ class MainActivity : ComponentActivity() {
                 return@setOnExitAnimationListener
             }
             val decor = window.decorView
-            val icon = provider.iconView
-            val hasIcon = icon.isAttachedToWindow && icon.width > 0
-            val center = if (hasIcon) {
-                val at = IntArray(2).also(icon::getLocationInWindow)
-                Offset(at[0] + icon.width / 2f, at[1] + icon.height / 2f)
-            } else {
-                Offset(decor.width / 2f, decor.height / 2f)
-            }
-            handoff.begin(
-                fly = fromLauncher,
-                iconCenter = center,
-                // Android 12+ sizes the icon view to the 192dp circle (72 of the 108 units); the
-                // compat splash's view spans all 108. ic_splash_paw draws the paw at 1.5x of that.
-                unit = if (!hasIcon) 0f else 1.5f * icon.width / (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) 72f else 108f),
-                splashView = provider.view,
-                remove = provider::remove,
-            )
+            // Let the toes finish popping in: until then the launch transition is still running,
+            // and the system keeps its own splash surface over the app, hiding the flight.
+            decor.postDelayed({
+                val icon = provider.iconView
+                val hasIcon = icon.isAttachedToWindow && icon.width > 0
+                val center = if (hasIcon) {
+                    val at = IntArray(2).also(icon::getLocationInWindow)
+                    Offset(at[0] + icon.width / 2f, at[1] + icon.height / 2f)
+                } else {
+                    Offset(decor.width / 2f, decor.height / 2f)
+                }
+                handoff.begin(
+                    fly = fromLauncher,
+                    iconCenter = center,
+                    // Android 12+ sizes the icon view to the 192dp circle (72 of the 108 units); the
+                    // compat splash's view spans all 108. ic_splash_paw draws the paw at 1.5x of that.
+                    unit = if (!hasIcon) 0f else 1.5f * icon.width / (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) 72f else 108f),
+                    splashView = provider.view,
+                    remove = provider::remove,
+                )
+            }, remainingIconMs(provider))
         }
+    }
+
+    /** What is left of the icon's animation (0 below 12, where the icon is static). */
+    private fun remainingIconMs(provider: androidx.core.splashscreen.SplashScreenViewProvider): Long {
+        val start = provider.iconAnimationStartMillis
+        val duration = provider.iconAnimationDurationMillis
+        if (start <= 0L || duration <= 0L) return 0L
+        // The platform stamps the start as an Instant; read it on the clock it came from.
+        val wall = System.currentTimeMillis()
+        val now = if (kotlin.math.abs(wall - start) < 60_000L) wall else SystemClock.uptimeMillis()
+        return (start + duration - now).coerceIn(0L, duration)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -173,7 +189,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private companion object {
-        const val MaxHoldMs = 1_000L
         const val GiveUpMs = 3_000L
     }
 }

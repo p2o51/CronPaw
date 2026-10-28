@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ic_splash_paw's toes popping in: the splash's length. -->
+    <integer name="splash_icon_duration">640</integer>
+</resources>
