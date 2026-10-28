@@ -131,6 +131,7 @@ class MainActivity : ComponentActivity() {
                 // Android 12+ sizes the icon view to the 192dp circle (72 of the 108 units); the
                 // compat splash's view spans all 108. ic_splash_paw draws the paw at 1.5x of that.
                 unit = if (!hasIcon) 0f else 1.5f * icon.width / (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) 72f else 108f),
+                splashView = provider.view,
                 remove = provider::remove,
             )
         }
@@ -155,6 +156,12 @@ class MainActivity : ComponentActivity() {
             val item = intent.getStringExtra(WidgetOpen.Item)?.let { key -> Agenda.items.value.firstOrNull { it.key == key } }
             HomeRequests.jump.value = HomeRequests.Jump(date, open = item)
         }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        android.util.Log.d("LaunchHandoff", "window focus=$hasFocus at ${System.currentTimeMillis()}")
+        if (hasFocus) handoff.windowFocused = true
     }
 
     override fun onResume() {

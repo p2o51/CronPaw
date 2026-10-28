@@ -97,14 +97,27 @@ class LaunchHandoff {
 
     private var removeSplash: (() -> Unit)? = null
 
+    /** The splash view has left our window, and the window has focus (the system's starting
+     *  surface is gone): until both, the platform splash still covers the overlay. */
+    private var splashDetached by mutableStateOf(false)
+    var windowFocused by mutableStateOf(false)
+
     /** The splash is done: [fly] when launched from the launcher, else it fades. */
-    fun begin(fly: Boolean, iconCenter: Offset, unit: Float, remove: () -> Unit) {
+    fun begin(fly: Boolean, iconCenter: Offset, unit: Float, splashView: android.view.View?, remove: () -> Unit) {
         if (phase != Phase.Waiting) {
             remove()
             return
         }
         this.iconCenter = iconCenter
         this.unit = unit
+        splashView?.addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: android.view.View) = Unit
+            override fun onViewDetachedFromWindow(v: android.view.View) {
+                Log.d(Tag, "splash view detached at ${System.currentTimeMillis()}")
+                splashDetached = true
+            }
+        })
+        if (splashView == null || !splashView.isAttachedToWindow) splashDetached = true
         var removed = false
         removeSplash = {
             if (!removed) {
@@ -139,7 +152,12 @@ class LaunchHandoff {
         withFrameNanos { }
         withFrameNanos { }
         removeSplash?.invoke()
-        Log.d(Tag, "repainted, phase=$phase")
+        Log.d(Tag, "repainted, phase=$phase, removed at ${System.currentTimeMillis()}")
+        // remove() only asks: the platform splash can stay on screen for another half second
+        // (seen on API 36). Hold the repainted frame until it has really gone, then a frame more.
+        withTimeoutOrNull(UncoverWaitMs) { snapshotFlow { splashDetached && windowFocused }.first { it } }
+        withFrameNanos { }
+        Log.d(Tag, "uncovered at ${System.currentTimeMillis()} (detached=$splashDetached focused=$windowFocused)")
         if (phase == Phase.Flying) {
             target = withTimeoutOrNull(SlotWaitMs) { snapshotFlow { slot }.filterNotNull().first() }
             if (target == null) phase = Phase.Fading
@@ -198,6 +216,7 @@ class LaunchHandoff {
         const val FlightAfterMs = 200L
         const val SlotWaitMs = 300L
         const val SteadyWaitMs = 600L
+        const val UncoverWaitMs = 900L
         const val Tag = "LaunchHandoff"
         const val SeatedAt = 0.99f
     }
