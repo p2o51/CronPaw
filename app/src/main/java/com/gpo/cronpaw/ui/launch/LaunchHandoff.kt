@@ -70,8 +70,30 @@ import kotlin.math.pow
  * Springs throughout, read in the draw and layer phases only.
  */
 @Stable
-class LaunchHandoff {
+class LaunchHandoff(private val window: android.view.Window) {
     enum class Phase { Waiting, Flying, Fading, Done }
+
+    /**
+     * Frames the render thread has actually finished, and how long the last one took. The
+     * choreographer keeps ticking while the home's first heavy draws hold the screen for most of a
+     * second; only finished frames say the motion is being seen.
+     */
+    @Volatile private var rendered = 0
+    @Volatile private var lastFrameMs = 0L
+    private val metrics = android.view.Window.OnFrameMetricsAvailableListener { _, frame, _ ->
+        lastFrameMs = frame.getMetric(android.view.FrameMetrics.TOTAL_DURATION) / 1_000_000L
+        rendered++
+    }
+    private var metricsOn = false
+
+    private fun watchFrames(on: Boolean) {
+        if (on == metricsOn) return
+        metricsOn = on
+        runCatching {
+            if (on) window.addOnFrameMetricsAvailableListener(metrics, android.os.Handler(android.os.Looper.getMainLooper()))
+            else window.removeOnFrameMetricsAvailableListener(metrics)
+        }
+    }
 
     var phase by mutableStateOf(Phase.Waiting)
         private set
@@ -140,6 +162,7 @@ class LaunchHandoff {
     }
 
     private fun finish() {
+        watchFrames(false)
         removeSplash?.invoke()
         removeSplash = null
         phase = Phase.Done
@@ -197,12 +220,23 @@ class LaunchHandoff {
         var t = 0L
         var last = -1L
         var stalls = 0
+        var seen = rendered
+        var pending = 0L
         while (t < end) {
             withFrameNanos { now ->
+                // Only a step whose previous frame reached the screen moves the clock on.
+                val shown = rendered != seen || !metricsOn
+                seen = rendered
                 if (last >= 0) {
                     val dt = now - last
                     if (dt > 50_000_000L) stalls++
-                    t += minOf(dt, MaxStepNanos)
+                    // Frame metrics land a vsync or two late: hold the time until they do, but no
+                    // more than two steps' worth, so a stalled screen never gets ahead of the eye.
+                    pending = minOf(pending + minOf(dt, MaxStepNanos), 2 * MaxStepNanos)
+                    if (shown) {
+                        t += pending
+                        pending = 0L
+                    }
                 }
                 last = now
             }
@@ -215,16 +249,20 @@ class LaunchHandoff {
         Log.d(Tag, "played, $stalls stalled frames")
     }
 
+    /** Until three frames in a row have rendered in time (at most [SteadyWaitMs]). */
     private suspend fun steadyFrames() {
+        watchFrames(true)
         val start = System.nanoTime()
-        var last = withFrameNanos { it }
+        var seen = rendered
         var steady = 0
-        while (steady < 2 && System.nanoTime() - start < SteadyWaitMs * 1_000_000L) {
-            val now = withFrameNanos { it }
-            steady = if (now - last < 25_000_000L) steady + 1 else 0
-            last = now
+        while (steady < 3 && System.nanoTime() - start < SteadyWaitMs * 1_000_000L) {
+            withFrameNanos { }
+            if (rendered != seen) {
+                steady = if (lastFrameMs < 34L) steady + (rendered - seen) else 0
+                seen = rendered
+            }
         }
-        Log.d(Tag, "steady after ${(System.nanoTime() - start) / 1_000_000} ms")
+        Log.d(Tag, "steady after ${(System.nanoTime() - start) / 1_000_000} ms ($rendered frames rendered, last ${lastFrameMs} ms)")
     }
 
     /** The pad's centre at flight progress [p]: rises a little first, then turns into the button. */
@@ -248,7 +286,7 @@ class LaunchHandoff {
         val FlightSpring = spring<Float>(dampingRatio = 0.85f, stiffness = 200f)
         const val FlightAfterMs = 200L
         const val SlotWaitMs = 300L
-        const val SteadyWaitMs = 600L
+        const val SteadyWaitMs = 1_500L
         const val MaxStepNanos = 25_000_000L
         const val UncoverWaitMs = 900L
         const val Tag = "LaunchHandoff"

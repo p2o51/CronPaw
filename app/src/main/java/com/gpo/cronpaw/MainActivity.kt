@@ -48,7 +48,7 @@ import java.time.LocalDate
 class MainActivity : ComponentActivity() {
     /** Compose has laid out its first frame: the splash may go. */
     private var firstLayout = false
-    private val handoff = LaunchHandoff()
+    private val handoff by lazy { LaunchHandoff(window) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
