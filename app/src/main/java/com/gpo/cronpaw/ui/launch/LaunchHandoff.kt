@@ -3,6 +3,8 @@ package com.gpo.cronpaw.ui.launch
 import android.util.Log
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.TargetBasedAnimation
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
@@ -49,12 +51,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import com.gpo.cronpaw.R
 import com.gpo.cronpaw.ui.theme.YoinMotion
-import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 import kotlin.math.pow
@@ -172,14 +171,48 @@ class LaunchHandoff {
             finish()
             return@coroutineScope
         }
-        // 31 rolls over to today while the page is still big enough to read it.
-        if (LocalDate.now().dayOfMonth != IconDay) launch { roll.animateTo(1f, RollSpring) }
-        delay(FlightAfterMs)
-        launch { field.animateTo(0f, effects) }
-        launch { flight.animateTo(1f, FlightSpring) }
-        snapshotFlow { flight.value >= SeatedAt && field.value <= 0.01f }.first { it }
+        // 31 rolls over to today while the page is still big enough to read it; then the field lifts
+        // and the pad flies.
+        play(effects)
         finish()
-        coroutineContext.cancelChildren()
+    }
+
+    /**
+     * The roll, the field and the flight on one clock that never jumps more than a frame and a
+     * half: the home's first heavy frames (shaders, the agenda arriving) can stall the screen for
+     * half a second, and springs on the wall clock would spend that unseen and land in a cut.
+     * Here a stall only pauses the motion.
+     */
+    private suspend fun play(effects: FiniteAnimationSpec<Float>) {
+        val rolls = LocalDate.now().dayOfMonth != IconDay
+        val rollAnim = TargetBasedAnimation(RollSpring, Float.VectorConverter, 0f, 1f)
+        val fieldAnim = TargetBasedAnimation(effects, Float.VectorConverter, 1f, 0f)
+        val flightAnim = TargetBasedAnimation(FlightSpring, Float.VectorConverter, 0f, 1f)
+        val after = FlightAfterMs * 1_000_000L
+        val end = maxOf(
+            if (rolls) rollAnim.durationNanos else 0L,
+            after + fieldAnim.durationNanos,
+            after + flightAnim.durationNanos,
+        )
+        var t = 0L
+        var last = -1L
+        var stalls = 0
+        while (t < end) {
+            withFrameNanos { now ->
+                if (last >= 0) {
+                    val dt = now - last
+                    if (dt > 50_000_000L) stalls++
+                    t += minOf(dt, MaxStepNanos)
+                }
+                last = now
+            }
+            if (rolls) roll.snapTo(rollAnim.getValueFromNanos(t))
+            if (t > after) {
+                field.snapTo(fieldAnim.getValueFromNanos(t - after))
+                flight.snapTo(flightAnim.getValueFromNanos(t - after))
+            }
+        }
+        Log.d(Tag, "played, $stalls stalled frames")
     }
 
     private suspend fun steadyFrames() {
@@ -216,6 +249,7 @@ class LaunchHandoff {
         const val FlightAfterMs = 200L
         const val SlotWaitMs = 300L
         const val SteadyWaitMs = 600L
+        const val MaxStepNanos = 25_000_000L
         const val UncoverWaitMs = 900L
         const val Tag = "LaunchHandoff"
         const val SeatedAt = 0.99f
