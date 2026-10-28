@@ -1,5 +1,6 @@
 package com.gpo.cronpaw.ui.launch
 
+import android.util.Log
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.spring
@@ -133,15 +134,23 @@ class LaunchHandoff {
     }
 
     internal suspend fun run(effects: FiniteAnimationSpec<Float>, fastEffects: FiniteAnimationSpec<Float>): Unit = coroutineScope {
-        // The repainted frame is on screen: drop the platform splash under it, no seam.
+        // Two frames: the one that drew the repainted splash, and the one after it is on screen.
+        // Only then drop the platform splash under it, so no frame of the bare home shows through.
+        withFrameNanos { }
         withFrameNanos { }
         removeSplash?.invoke()
+        Log.d(Tag, "repainted, phase=$phase")
         if (phase == Phase.Flying) {
             target = withTimeoutOrNull(SlotWaitMs) { snapshotFlow { slot }.filterNotNull().first() }
             if (target == null) phase = Phase.Fading
+            Log.d(Tag, "slot=${target?.bounds}")
         }
+        // The first frames after launch are the busiest (the agenda loading, the home's first
+        // pages): a spring started then skips most of its frames and reads as a cut. Wait, briefly,
+        // for two frames in a row on time.
+        steadyFrames()
         if (phase == Phase.Fading) {
-            fade.animateTo(0f, fastEffects)
+            fade.animateTo(0f, effects)
             finish()
             return@coroutineScope
         }
@@ -153,6 +162,18 @@ class LaunchHandoff {
         snapshotFlow { flight.value >= SeatedAt && field.value <= 0.01f }.first { it }
         finish()
         coroutineContext.cancelChildren()
+    }
+
+    private suspend fun steadyFrames() {
+        val start = System.nanoTime()
+        var last = withFrameNanos { it }
+        var steady = 0
+        while (steady < 2 && System.nanoTime() - start < SteadyWaitMs * 1_000_000L) {
+            val now = withFrameNanos { it }
+            steady = if (now - last < 25_000_000L) steady + 1 else 0
+            last = now
+        }
+        Log.d(Tag, "steady after ${(System.nanoTime() - start) / 1_000_000} ms")
     }
 
     /** The pad's centre at flight progress [p]: rises a little first, then turns into the button. */
@@ -176,6 +197,8 @@ class LaunchHandoff {
         val FlightSpring = spring<Float>(dampingRatio = 0.85f, stiffness = 200f)
         const val FlightAfterMs = 200L
         const val SlotWaitMs = 300L
+        const val SteadyWaitMs = 600L
+        const val Tag = "LaunchHandoff"
         const val SeatedAt = 0.99f
     }
 }

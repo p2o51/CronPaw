@@ -111,6 +111,7 @@ class MainActivity : ComponentActivity() {
         // Android 12+ calls the exit listener only for a splash it actually showed.
         window.decorView.postDelayed(handoff::abandonIfWaiting, GiveUpMs)
         splash.setOnExitAnimationListener { provider ->
+            android.util.Log.d("LaunchHandoff", "splash exit: fromLauncher=$fromLauncher animators=${ValueAnimator.areAnimatorsEnabled()}")
             if (savedInstanceState != null || !ValueAnimator.areAnimatorsEnabled()) {
                 handoff.skip(provider::remove)
                 return@setOnExitAnimationListener
