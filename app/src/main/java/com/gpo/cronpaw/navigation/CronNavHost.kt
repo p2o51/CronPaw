@@ -31,7 +31,7 @@ import com.gpo.cronpaw.feature.settings.SettingsScreen
 import com.gpo.cronpaw.ui.theme.LocalYoinMotionRole
 import com.gpo.cronpaw.ui.theme.YoinMotion
 
-/** Five pages, so a plain stack of strings: "home", "search", "settings", "focus", "db:<id>" ("db:" = pick a new one). */
+/** Six pages, so a plain stack of strings: "home", "search", "settings", "focus", "notion", "db:<id>" ("db:" = pick a new one). */
 class Nav(private val stack: MutableList<String>) {
     val top: String get() = stack.last()
     val depth: Int get() = stack.size
@@ -76,6 +76,7 @@ fun CronNavHost() {
             when {
                 route == "search" -> SearchScreen(nav)
                 route == "settings" -> SettingsScreen(nav)
+                route == "notion" -> com.gpo.cronpaw.feature.settings.NotionSettingsScreen(nav)
                 route == "focus" -> FocusScreen(nav)
                 route.startsWith("db:") -> DatabaseSetupScreen(nav, route.removePrefix("db:").ifEmpty { null })
                 else -> Box(Modifier.fillMaxSize())

@@ -387,12 +387,7 @@ private fun VoiceStage(
 ) {
     val cs = MaterialTheme.colorScheme
     val quick = remember {
-        AppSettings.quickEntries.value.lines().mapNotNull { line ->
-            val parts = line.split('|')
-            val t = parts.getOrNull(0)?.trim().orEmpty()
-            val m = parts.getOrNull(1)?.trim()?.toIntOrNull() ?: return@mapNotNull null
-            if (t.isEmpty()) null else t to m
-        }
+        com.gpo.cronpaw.core.settings.QuickEntries.load().filter { it.title.isNotEmpty() }.map { it.title to it.minutes }
     }
     val pulse by animateFloatAsState(1f + level * 0.35f, label = "pulse")
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
