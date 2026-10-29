@@ -41,13 +41,12 @@ import com.gpo.cronpaw.ui.theme.YoinMotion
 import com.gpo.cronpaw.ui.theme.rememberRichHaptics
 import com.gpo.yoin.symbols.YoinSymbols
 
-/** The slider's detents: 5 to 120 minutes in fives. Longer goes through …. */
-private const val Step = 5
-private const val Steps = 120 / Step
+/** The slider's detents: the lengths people pick, few enough to land on by feel. Others go through …. */
+private val Detents = listOf(5, 10, 15, 20, 25, 30, 45, 60, 90, 120)
 
 /**
  * 快捷入口 as things you can see and move: each one a card with its name and a slider for its
- * length, … for anything past two hours, × to drop it, and + at the end. Saved as you go.
+ * length (ten detents, 5 minutes to 2 hours), … for anything else, × to drop it, and + at the end. Saved as you go.
  */
 @Composable
 internal fun QuickEntryEditor() {
@@ -85,8 +84,8 @@ internal fun QuickEntryEditor() {
 private fun QuickEntryCard(entry: QuickEntries.Entry, onChange: (QuickEntries.Entry) -> Unit, onRemove: () -> Unit) {
     val haptics = rememberRichHaptics()
     val cs = MaterialTheme.colorScheme
-    // Past the slider's end, or off its fives: typed in, so the … field opens with it.
-    var custom by remember { mutableStateOf(entry.minutes > Steps * Step || entry.minutes % Step != 0) }
+    // Off the slider's detents: typed in, so the … field opens with it.
+    var custom by remember { mutableStateOf(entry.minutes !in Detents) }
     var typed by remember { mutableStateOf(entry.minutes.toString()) }
     Column(
         Modifier
@@ -115,10 +114,10 @@ private fun QuickEntryCard(entry: QuickEntries.Entry, onChange: (QuickEntries.En
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             WideSlider(
-                value = (entry.minutes / Step - 1).coerceIn(0, Steps - 1),
-                count = Steps,
+                value = Detents.indexOfFirst { it >= entry.minutes }.let { if (it < 0) Detents.lastIndex else it },
+                count = Detents.size,
                 onValueChange = {
-                    val m = (it + 1) * Step
+                    val m = Detents[it]
                     if (m != entry.minutes) {
                         haptics.tick()
                         custom = false
@@ -129,10 +128,10 @@ private fun QuickEntryCard(entry: QuickEntries.Entry, onChange: (QuickEntries.En
                 description = "${entry.title.ifEmpty { "快捷入口" }}的时长",
                 state = length(entry.minutes),
                 modifier = Modifier.weight(1f),
-                marks = setOf(30 / Step - 1, 60 / Step - 1, 90 / Step - 1),
+                marks = setOf(Detents.indexOf(30), Detents.indexOf(60)),
             )
             Spacer(Modifier.width(6.dp))
-            // …: longer than two hours, or a length off the fives.
+            // …: longer than two hours, or a length between the detents.
             Box(
                 Modifier
                     .size(40.dp)
@@ -149,7 +148,7 @@ private fun QuickEntryCard(entry: QuickEntries.Entry, onChange: (QuickEntries.En
             enter = expandVertically(YoinMotion.defaultSpatialSpec()) + fadeIn(YoinMotion.defaultEffectsSpec()),
             exit = shrinkVertically(YoinMotion.fastSpatialSpec()) + fadeOut(YoinMotion.fastEffectsSpec()),
         ) {
-            Row(Modifier.padding(top = 8.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(top = 8.dp, end = 8.dp)) {
                 BasicTextField(
                     typed,
                     { text ->
@@ -161,13 +160,14 @@ private fun QuickEntryCard(entry: QuickEntries.Entry, onChange: (QuickEntries.En
                     textStyle = MaterialTheme.typography.titleMedium.copy(color = cs.onSurface, fontWeight = FontWeight.Bold),
                     cursorBrush = SolidColor(cs.primary),
                     modifier = Modifier
+                        .alignByBaseline()
                         .width(96.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(cs.surfaceContainerHighest)
                         .padding(horizontal = 14.dp, vertical = 10.dp),
                 )
                 Spacer(Modifier.width(10.dp))
-                Text("分钟，最长一天", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                Text("分钟，最长一天", Modifier.alignByBaseline(), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
             }
         }
     }

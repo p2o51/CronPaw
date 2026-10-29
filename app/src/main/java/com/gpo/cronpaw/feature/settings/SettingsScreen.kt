@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -119,7 +121,11 @@ fun SettingsScreen(nav: Nav) {
         PawTopBar("设置", onBack = { nav.pop() })
         val scroll = rememberScrollState()
         // Yoin's seam: the page dissolves under the top bar instead of being cut by it.
-        Column(Modifier.seamViewport(scroll).verticalScroll(scroll).navigationBarsPadding().padding(horizontal = 12.dp)) {
+        // On a tablet the rows keep a phone's reach, centred: titles and values stay near each other.
+        Column(
+            Modifier.seamViewport(scroll).verticalScroll(scroll).navigationBarsPadding()
+                .fillMaxWidth().wrapContentWidth().widthIn(max = 640.dp).padding(horizontal = 12.dp),
+        ) {
             // ── 日历: where things come from. The phone's calendars and Notion side by side, each one
             // row; Notion's account and databases live on their own page. ──
             GroupTitle("日历", top = 8.dp)

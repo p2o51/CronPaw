@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -77,7 +79,11 @@ fun NotionSettingsScreen(nav: Nav) {
     Column(Modifier.fillMaxSize().background(cs.surface)) {
         PawTopBar("Notion", onBack = { nav.pop() })
         val scroll = rememberScrollState()
-        Column(Modifier.seamViewport(scroll).verticalScroll(scroll).navigationBarsPadding().padding(horizontal = 12.dp)) {
+        // On a tablet the rows keep a phone's reach, centred: titles and values stay near each other.
+        Column(
+            Modifier.seamViewport(scroll).verticalScroll(scroll).navigationBarsPadding()
+                .fillMaxWidth().wrapContentWidth().widthIn(max = 640.dp).padding(horizontal = 12.dp),
+        ) {
             // ── The account ──
             Column(
                 Modifier
@@ -103,12 +109,12 @@ fun NotionSettingsScreen(nav: Nav) {
                         "重新授权",
                         Modifier
                             .clip(CircleShape)
-                            .background(cs.secondaryContainer)
+                            .background(cs.primary)
                             .clickable { haptics.tick(); uriHandler.openUri(NotionOAuth.begin().toString()) }
                             .padding(horizontal = 18.dp, vertical = 10.dp),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
-                        color = cs.onSecondaryContainer,
+                        color = cs.onPrimary,
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
