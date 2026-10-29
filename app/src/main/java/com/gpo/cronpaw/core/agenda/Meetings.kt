@@ -6,7 +6,7 @@ package com.gpo.cronpaw.core.agenda
  */
 object Meetings {
     private val link = Regex(
-        """https?://(?:meet\.google\.com|(?:[\w-]+\.)?zoom\.(?:us|com\.cn)|meeting\.tencent\.com|voovmeeting\.com|teams\.microsoft\.com|teams\.live\.com|[\w-]+\.webex\.com)/[^\s<>"'）)\]]*""",
+        """https?://(?:meet\.google\.com|(?:[\w-]+\.)?zoom\.(?:us|com\.cn)|meeting\.tencent\.com|voovmeeting\.com|teams\.microsoft\.com|teams\.live\.com|[\w-]+\.webex\.com)/[^\s<>"'）)\]，。、；：！？　]*""",
         RegexOption.IGNORE_CASE,
     )
 
