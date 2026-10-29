@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,6 +61,7 @@ import com.gpo.cronpaw.core.agenda.Agenda
 import com.gpo.cronpaw.core.notion.NotionOAuth
 import com.gpo.cronpaw.core.notion.NotionRepo
 import com.gpo.cronpaw.core.settings.AppSettings
+import com.gpo.cronpaw.core.settings.QuickEntries
 import com.gpo.cronpaw.core.focus.FocusSettings
 import com.gpo.cronpaw.core.focus.FocusZen
 import com.gpo.cronpaw.R
@@ -73,9 +76,10 @@ import com.gpo.cronpaw.ui.theme.rememberRichHaptics
 import com.gpo.yoin.symbols.YoinSymbols
 
 /**
- * Settings by importance, in groups: Notion and its databases, how new items behave,
- * appearance, about. Tight inside a group, a clear gap and a small title between groups;
- * choices sit inline on their rows. Disconnecting comes last, on its own.
+ * Settings by importance, in groups: where the items come from (the phone's calendars and
+ * Notion, as peers), how new items behave, 专注, appearance, about. Tight inside a group, a
+ * clear gap and a small title between groups; choices sit inline on their rows. Notion's
+ * account and databases have their own page (NotionSettingsScreen).
  */
 @Composable
 fun SettingsScreen(nav: Nav) {
@@ -116,67 +120,73 @@ fun SettingsScreen(nav: Nav) {
         PawTopBar("设置", onBack = { nav.pop() })
         val scroll = rememberScrollState()
         // Yoin's seam: the page dissolves under the top bar instead of being cut by it.
-        Column(Modifier.seamViewport(scroll).verticalScroll(scroll).navigationBarsPadding().padding(horizontal = 12.dp)) {
-            // ── Notion: where things stand ──
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp)
-                    .clip(RoundedCornerShape(32.dp))
-                    .background(cs.primaryContainer)
-                    .padding(start = 22.dp, end = 16.dp, top = 20.dp, bottom = 20.dp),
-            ) {
-                val ink = cs.onPrimaryContainer
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(YoinSymbols.Database, null, Modifier.size(18.dp), tint = ink.copy(alpha = 0.7f))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Notion", style = MaterialTheme.typography.labelLarge, color = ink.copy(alpha = 0.7f))
+        // On a tablet the rows keep a phone's reach, centred: titles and values stay near each other.
+        Column(
+            Modifier.seamViewport(scroll).verticalScroll(scroll).navigationBarsPadding()
+                .fillMaxWidth().wrapContentWidth().widthIn(max = 640.dp).padding(horizontal = 12.dp),
+        ) {
+            // ── 日历: where things come from. The phone's calendars and Notion side by side, each one
+            // row; Notion's account and databases live on their own page. ──
+            GroupTitle("日历", top = 8.dp)
+            Card {
+                val off = calendars.count { it.id in removed }
+                ListRow(YoinSymbols.Calendar, "系统日历", "关掉的不进侧栏、不显示、也不能放进去", onClick = { haptics.tick(); calendarsOpen = !calendarsOpen }) {
+                    Text(if (off == 0) "全部" else "关了 $off 个", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    Chevron(calendarsOpen)
                 }
-                Text(
-                    if (connected) workspace.ifBlank { "已连接" } else "还没连接",
-                    Modifier.padding(top = 6.dp),
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = ink,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    if (connected) "${dbs.size} 个数据库在日历上" else "连接后，在授权页里勾上要放进日历的数据库。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = ink.copy(alpha = 0.75f),
-                )
-                oauthStatus?.let { Text(it, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodySmall, color = ink) }
-                Spacer(Modifier.height(14.dp))
-                Text(
-                    if (connected) "重新授权" else "连接 Notion",
-                    Modifier
-                        .clip(CircleShape)
-                        .background(if (connected) ink.copy(alpha = 0.12f) else ink)
-                        .clickable { haptics.tick(); uriHandler.openUri(NotionOAuth.begin().toString()) }
-                        .padding(horizontal = 18.dp, vertical = 10.dp),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = if (connected) ink else cs.primaryContainer,
-                )
-            }
-
-            // Its databases right under it, as tiles, with + at the end — only once connected.
-            if (connected) Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                dbs.forEach { db ->
-                    Tile(Modifier.alpha(if (db.enabled) 1f else 0.5f), db.title, onClick = { haptics.tick(); nav.push("db:${db.id}") }) {
-                        Box(
-                            Modifier.fillMaxSize().background(Color(db.color).copy(alpha = 0.22f)),
-                            contentAlignment = Alignment.Center,
-                        ) { Box(Modifier.size(18.dp).clip(RoundedCornerShape(6.dp)).background(Color(db.color))) }
+                Expand(calendarsOpen) {
+                    calendars.groupBy { it.accountName }.forEach { (account, cals) ->
+                        Text(
+                            account,
+                            Modifier.padding(start = 6.dp, top = 6.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = cs.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        cals.forEach { cal ->
+                            val on = cal.id !in removed
+                            Row(
+                                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                                    .clickable { haptics.tick(); Agenda.setCalendarRemoved(cal.id, on) }
+                                    .padding(start = 6.dp, top = 2.dp, bottom = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(Modifier.size(12.dp).clip(CircleShape).background(Color(cal.color).copy(alpha = if (on) 1f else 0.3f)))
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    cal.name,
+                                    Modifier.weight(1f),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = if (on) cs.onSurface else cs.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Switch(checked = on, onCheckedChange = { haptics.tick(); Agenda.setCalendarRemoved(cal.id, !it) })
+                            }
+                        }
                     }
                 }
-                Tile(Modifier, "添加", onClick = { haptics.tick(); nav.push("db:") }) {
-                    Box(Modifier.fillMaxSize().background(cs.surfaceContainerHigh), contentAlignment = Alignment.Center) {
-                        Icon(YoinSymbols.Add, null, tint = cs.onSurfaceVariant)
+                ListRow(
+                    YoinSymbols.Database,
+                    "Notion",
+                    oauthStatus ?: if (connected) workspace.ifBlank { "已连接" } else "连接后，把数据库放进日历",
+                    onClick = {
+                        haptics.tick()
+                        if (connected) nav.push("notion") else uriHandler.openUri(NotionOAuth.begin().toString())
+                    },
+                ) {
+                    if (connected) {
+                        Text("${dbs.size} 个数据库", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                        Chevron(false)
+                    } else {
+                        Text(
+                            "连接",
+                            Modifier.clip(CircleShape).background(cs.primary).padding(horizontal = 16.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = cs.onPrimary,
+                        )
                     }
                 }
             }
@@ -195,12 +205,10 @@ fun SettingsScreen(nav: Nav) {
                     }
                 }
                 ListRow(YoinSymbols.Keyboard, "快捷入口", onClick = { haptics.tick(); quickOpen = !quickOpen }) {
-                    Text("${quick.lines().count { it.isNotBlank() }} 个", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    Text("${QuickEntries.parse(quick).size} 个", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                     Chevron(quickOpen)
                 }
-                Expand(quickOpen) {
-                    Field("每行一个：标题|分钟", quick, { AppSettings.set(AppSettings.quickEntries, it) }, singleLine = false)
-                }
+                Expand(quickOpen) { QuickEntryEditor() }
                 ListRow(YoinSymbols.Mic, "语音识别", onClick = { haptics.tick(); voiceOpen = !voiceOpen }) {
                     Text(if (elevenKey.isBlank()) "系统" else "Scribe", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                     Chevron(voiceOpen)
@@ -247,49 +255,6 @@ fun SettingsScreen(nav: Nav) {
                 }
             }
 
-            // ── 日历: which system calendars CronPaw uses at all ──
-            GroupTitle("日历")
-            Card {
-                val off = calendars.count { it.id in removed }
-                ListRow(YoinSymbols.Calendar, "用哪些日历", "关掉的不进侧栏、不显示、也不能放进去", onClick = { haptics.tick(); calendarsOpen = !calendarsOpen }) {
-                    Text(if (off == 0) "全部" else "关了 $off 个", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-                    Chevron(calendarsOpen)
-                }
-                Expand(calendarsOpen) {
-                    calendars.groupBy { it.accountName }.forEach { (account, cals) ->
-                        Text(
-                            account,
-                            Modifier.padding(start = 6.dp, top = 6.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = cs.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        cals.forEach { cal ->
-                            val on = cal.id !in removed
-                            Row(
-                                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                                    .clickable { haptics.tick(); Agenda.setCalendarRemoved(cal.id, on) }
-                                    .padding(start = 6.dp, top = 2.dp, bottom = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Box(Modifier.size(12.dp).clip(CircleShape).background(Color(cal.color).copy(alpha = if (on) 1f else 0.3f)))
-                                Spacer(Modifier.width(12.dp))
-                                Text(
-                                    cal.name,
-                                    Modifier.weight(1f),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = if (on) cs.onSurface else cs.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Switch(checked = on, onCheckedChange = { haptics.tick(); Agenda.setCalendarRemoved(cal.id, !it) })
-                            }
-                        }
-                    }
-                }
-            }
-
             // ── 外观 ──
             GroupTitle("外观")
             Card {
@@ -318,116 +283,7 @@ fun SettingsScreen(nav: Nav) {
                 }
             }
 
-            // Disconnecting is rare and drastic: last, on its own, quiet red.
-            if (connected) {
-                Text(
-                    "断开 Notion",
-                    Modifier
-                        .padding(top = 24.dp)
-                        .align(Alignment.CenterHorizontally)
-                        .clip(CircleShape)
-                        .clickable { NotionOAuth.disconnect(); Agenda.refresh(); toast("已断开") }
-                        .padding(horizontal = 20.dp, vertical = 10.dp),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = cs.error,
-                )
-            }
             Spacer(Modifier.height(32.dp))
         }
-    }
-}
-
-/** Groups are 24dp apart under a small title; rows inside a group touch. */
-@Composable
-private fun GroupTitle(text: String) {
-    Text(
-        text,
-        Modifier.padding(start = 20.dp, top = 32.dp, bottom = 8.dp).seamText(),
-        style = MaterialTheme.typography.labelMedium,
-        letterSpacing = androidx.compose.ui.unit.TextUnit(1f, androidx.compose.ui.unit.TextUnitType.Sp),
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary,
-    )
-}
-
-@Composable
-private fun Card(content: @Composable () -> Unit) {
-    Column(
-        Modifier.fillMaxWidth().seamGraphic().clip(RoundedCornerShape(28.dp)).background(MaterialTheme.colorScheme.surfaceContainer).padding(vertical = 4.dp),
-    ) { content() }
-}
-
-@Composable
-private fun Tile(modifier: Modifier, label: String, onClick: () -> Unit, face: @Composable () -> Unit) {
-    Column(modifier.width(72.dp).clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(60.dp).clip(RoundedCornerShape(18.dp))) { face() }
-        Spacer(Modifier.height(6.dp))
-        Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
-
-/** Icon, title (and a quiet line under it), then whatever the row holds on the right. */
-@Composable
-private fun ListRow(
-    icon: ImageVector,
-    title: String,
-    hint: String? = null,
-    onClick: (() -> Unit)? = null,
-    trailing: @Composable () -> Unit,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(min = 60.dp)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(start = 18.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurface)
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f).seamText()) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-            if (hint != null) Text(hint, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
-        }
-        Spacer(Modifier.width(8.dp))
-        trailing()
-    }
-}
-
-/** Plain words in a line, the chosen one coloured — like a player's speed row. */
-@Composable
-private fun <T> InlineChoices(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        options.forEachIndexed { i, (v, label) ->
-            val on = v == selected
-            val ink by animateColorAsState(if (on) cs.primary else cs.onSurfaceVariant, YoinMotion.defaultEffectsSpec(), label = "choice")
-            Text(
-                label,
-                Modifier.clip(RoundedCornerShape(10.dp)).clickable { onSelect(v) }
-                    .padding(start = 7.dp, end = if (i == options.lastIndex) 0.dp else 7.dp, top = 8.dp, bottom = 8.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
-                color = ink,
-            )
-        }
-    }
-}
-
-@Composable
-private fun Chevron(open: Boolean) {
-    val turn by animateFloatAsState(if (open) 90f else 0f, YoinMotion.defaultSpatialSpec(), label = "chevron")
-    Icon(YoinSymbols.ChevronRight, null, Modifier.size(20.dp).graphicsLayer { rotationZ = turn }, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-}
-
-@Composable
-private fun Expand(open: Boolean, content: @Composable () -> Unit) {
-    AnimatedVisibility(
-        open,
-        enter = expandVertically(YoinMotion.defaultSpatialSpec()) + fadeIn(YoinMotion.defaultEffectsSpec()),
-        exit = shrinkVertically(YoinMotion.fastSpatialSpec()) + fadeOut(YoinMotion.fastEffectsSpec()),
-    ) {
-        Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { content() }
     }
 }
