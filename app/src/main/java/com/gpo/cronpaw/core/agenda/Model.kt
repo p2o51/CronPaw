@@ -43,6 +43,8 @@ data class AgendaItem(
     val todo: Boolean = false,
     val done: Boolean = false,
     val location: String? = null,
+    /** A video-call link from the location or the notes (core/agenda/Meetings). */
+    val meeting: String? = null,
 ) {
     val isNotion: Boolean get() = source is Source.Notion
     val durationMinutes: Int get() = ((end - start) / 60_000L).toInt()

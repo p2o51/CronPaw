@@ -89,6 +89,7 @@ object CalendarRepo {
             CalendarContract.Instances.DISPLAY_COLOR,
             CalendarContract.Instances.CALENDAR_ID,
             CalendarContract.Instances.EVENT_LOCATION,
+            CalendarContract.Instances.DESCRIPTION,
         )
         val zone = ZoneId.systemDefault()
         val out = mutableListOf<AgendaItem>()
@@ -116,6 +117,8 @@ object CalendarRepo {
                         color = c.getInt(5),
                         source = Source.Calendar(calId, eventId),
                         location = c.getString(7)?.takeIf { it.isNotBlank() },
+                        // Only the link is kept from the notes, not the notes themselves.
+                        meeting = Meetings.find(c.getString(7), c.getString(8)),
                     )
                 }
             }

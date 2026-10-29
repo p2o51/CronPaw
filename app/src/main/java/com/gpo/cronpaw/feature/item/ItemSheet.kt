@@ -54,6 +54,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.gpo.cronpaw.core.agenda.Actions
 import com.gpo.cronpaw.core.agenda.Agenda
+import com.gpo.cronpaw.core.agenda.Meetings
 import com.gpo.cronpaw.core.agenda.AgendaItem
 import com.gpo.cronpaw.core.agenda.Pins
 import com.gpo.cronpaw.core.focus.FocusController
@@ -155,7 +156,29 @@ fun ItemSheet(item: AgendaItem, onDismiss: () -> Unit) {
                             )
                         }
                     }
-                    live.location?.let { Text(it, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodyMedium, color = heroInk.copy(alpha = 0.75f)) }
+                    // The place, without the call link when the link has its own button below.
+                    live.location?.let { loc -> live.meeting?.let { loc.replace(it, "") } ?: loc }?.trim()?.trim(',', '，', ';')?.takeIf { it.isNotBlank() }?.let {
+                        Text(it, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodyMedium, color = heroInk.copy(alpha = 0.75f))
+                    }
+                    // A video call: one tap into it (the Zoom / Meet / 腾讯会议 app takes the link when installed).
+                    live.meeting?.let { url ->
+                        Row(
+                            Modifier
+                                .padding(top = 14.dp)
+                                .clip(CircleShape)
+                                .background(heroInk)
+                                .clickable {
+                                    haptics.tick()
+                                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.onFailure { toast("打不开这个链接") }
+                                }
+                                .padding(start = 16.dp, end = 20.dp, top = 10.dp, bottom = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(CronSymbols.Videocam, null, Modifier.size(20.dp), tint = heroBg)
+                            Spacer(Modifier.width(8.dp))
+                            Text("加入 ${Meetings.service(url)}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = heroBg)
+                        }
+                    }
                     // Where it lives belongs to what it is, so it stays inside the block.
                     val origin = when (val src = live.source) {
                         is Source.Calendar -> calendars.firstOrNull { it.id == src.calendarId }?.let { cal ->
