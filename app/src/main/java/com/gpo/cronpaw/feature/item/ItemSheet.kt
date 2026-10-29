@@ -176,7 +176,7 @@ fun ItemSheet(item: AgendaItem, onDismiss: () -> Unit) {
                         ) {
                             Icon(CronSymbols.Videocam, null, Modifier.size(20.dp), tint = heroBg)
                             Spacer(Modifier.width(8.dp))
-                            Text("加入 ${Meetings.service(url)}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = heroBg)
+                            Text(Meetings.service(url).let { if (it.first().code < 0x2E80) "加入 $it" else "加入$it" }, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = heroBg)
                         }
                     }
                     // Where it lives belongs to what it is, so it stays inside the block.
