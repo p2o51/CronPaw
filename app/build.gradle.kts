@@ -66,7 +66,7 @@ kotlin {
 }
 
 dependencies {
-    implementation(project(":yoin-symbols"))
+    implementation(libs.yoin.symbols)
 
     val composeBom = platform(libs.compose.bom)
     implementation(composeBom)

@@ -69,7 +69,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
-import com.gpo.cronpaw.ui.theme.CronSymbols
 import com.gpo.cronpaw.ui.theme.LocalYoinMotionRole
 import com.gpo.cronpaw.ui.theme.YoinMotion
 import com.gpo.cronpaw.ui.theme.rememberRichHaptics
@@ -202,7 +201,7 @@ fun TopCard(
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (item.key in pins) {
-                            Icon(CronSymbols.PinFilled, null, Modifier.size(14.dp), tint = cs.primary)
+                            Icon(YoinSymbols.PinFilled, null, Modifier.size(14.dp), tint = cs.primary)
                             Spacer(Modifier.width(4.dp))
                         }
                         Text(
@@ -398,7 +397,7 @@ fun AllUpcomingSheet(items: List<AgendaItem>, onItem: (AgendaItem) -> Unit, onDi
 @Composable
 private fun PinButton(pinned: Boolean, tint: Color, onClick: () -> Unit) {
     IconButton(onClick = onClick) {
-        Icon(if (pinned) CronSymbols.PinFilled else CronSymbols.Pin, if (pinned) "取消置顶" else "置顶", tint = tint)
+        Icon(if (pinned) YoinSymbols.PinFilled else YoinSymbols.Pin, if (pinned) "取消置顶" else "置顶", tint = tint)
     }
 
 }

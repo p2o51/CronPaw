@@ -53,7 +53,6 @@ import com.gpo.cronpaw.core.agenda.AgendaItem
 import com.gpo.cronpaw.core.settings.AppSettings
 import com.gpo.cronpaw.feature.home.HomeRequests
 import com.gpo.cronpaw.navigation.Nav
-import com.gpo.cronpaw.ui.theme.CronSymbols
 import com.gpo.cronpaw.ui.time.Times
 import com.gpo.yoin.symbols.YoinSymbols
 import java.time.LocalDate
@@ -168,7 +167,7 @@ fun SearchScreen(nav: Nav) {
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(CronSymbols.Calendar, null, Modifier.size(20.dp), tint = cs.onSecondaryContainer)
+                    Icon(YoinSymbols.Calendar, null, Modifier.size(20.dp), tint = cs.onSecondaryContainer)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         val y = if (r.from.year != LocalDate.now().year) "${r.from.year}." else ""

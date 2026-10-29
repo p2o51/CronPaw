@@ -68,7 +68,6 @@ import androidx.lifecycle.compose.currentStateAsState
 import com.gpo.cronpaw.navigation.Nav
 import com.gpo.cronpaw.ui.components.PawTopBar
 import com.gpo.cronpaw.ui.components.rememberToast
-import com.gpo.cronpaw.ui.theme.CronSymbols
 import com.gpo.cronpaw.ui.theme.YoinMotion
 import com.gpo.cronpaw.ui.theme.rememberRichHaptics
 import com.gpo.yoin.symbols.YoinSymbols
@@ -129,7 +128,7 @@ fun SettingsScreen(nav: Nav) {
             ) {
                 val ink = cs.onPrimaryContainer
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(CronSymbols.Database, null, Modifier.size(18.dp), tint = ink.copy(alpha = 0.7f))
+                    Icon(YoinSymbols.Database, null, Modifier.size(18.dp), tint = ink.copy(alpha = 0.7f))
                     Spacer(Modifier.width(6.dp))
                     Text("Notion", style = MaterialTheme.typography.labelLarge, color = ink.copy(alpha = 0.7f))
                 }
@@ -185,7 +184,7 @@ fun SettingsScreen(nav: Nav) {
             // ── 新建: how new items behave ──
             GroupTitle("新建")
             Card {
-                ListRow(CronSymbols.Calendar, "默认时长", "点时间轴空白处新建 · 分钟") {
+                ListRow(YoinSymbols.Calendar, "默认时长", "点时间轴空白处新建 · 分钟") {
                     InlineChoices(listOf(15, 30, 45, 60, 90, 120).map { it to it.toString() }, defaultMinutes) {
                         haptics.tick(); AppSettings.set(AppSettings.defaultMinutes, it)
                     }
@@ -195,14 +194,14 @@ fun SettingsScreen(nav: Nav) {
                         haptics.tick(); AppSettings.set(AppSettings.autoSaveSeconds, it)
                     }
                 }
-                ListRow(CronSymbols.Keyboard, "快捷入口", onClick = { haptics.tick(); quickOpen = !quickOpen }) {
+                ListRow(YoinSymbols.Keyboard, "快捷入口", onClick = { haptics.tick(); quickOpen = !quickOpen }) {
                     Text("${quick.lines().count { it.isNotBlank() }} 个", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                     Chevron(quickOpen)
                 }
                 Expand(quickOpen) {
                     Field("每行一个：标题|分钟", quick, { AppSettings.set(AppSettings.quickEntries, it) }, singleLine = false)
                 }
-                ListRow(CronSymbols.Mic, "语音识别", onClick = { haptics.tick(); voiceOpen = !voiceOpen }) {
+                ListRow(YoinSymbols.Mic, "语音识别", onClick = { haptics.tick(); voiceOpen = !voiceOpen }) {
                     Text(if (elevenKey.isBlank()) "系统" else "Scribe", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                     Chevron(voiceOpen)
                 }
@@ -235,7 +234,7 @@ fun SettingsScreen(nav: Nav) {
                 ListRow(YoinSymbols.Sparkle, "开始前深呼吸", "约 7 秒，点一下跳过") {
                     Switch(breath, { haptics.tick(); AppSettings.set(FocusSettings.breath, it) })
                 }
-                ListRow(CronSymbols.Bell, "专注模式", if (zenAccess) "谁能打扰，在系统的模式设置里改" else "要先允许 CronPaw 管理勿扰", onClick = {
+                ListRow(YoinSymbols.Bell, "专注模式", if (zenAccess) "谁能打扰，在系统的模式设置里改" else "要先允许 CronPaw 管理勿扰", onClick = {
                     haptics.tick()
                     val intent = if (zenAccess) FocusZen.settingsIntent(context) ?: FocusZen.accessIntent() else FocusZen.accessIntent()
                     runCatching { context.startActivity(intent) }
@@ -252,7 +251,7 @@ fun SettingsScreen(nav: Nav) {
             GroupTitle("日历")
             Card {
                 val off = calendars.count { it.id in removed }
-                ListRow(CronSymbols.Calendar, "用哪些日历", "关掉的不进侧栏、不显示、也不能放进去", onClick = { haptics.tick(); calendarsOpen = !calendarsOpen }) {
+                ListRow(YoinSymbols.Calendar, "用哪些日历", "关掉的不进侧栏、不显示、也不能放进去", onClick = { haptics.tick(); calendarsOpen = !calendarsOpen }) {
                     Text(if (off == 0) "全部" else "关了 $off 个", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                     Chevron(calendarsOpen)
                 }

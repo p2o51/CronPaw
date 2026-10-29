@@ -67,7 +67,6 @@ import com.gpo.cronpaw.core.notion.PropValue
 import com.gpo.cronpaw.feature.home.TodoDot
 import com.gpo.cronpaw.feature.home.itemColors
 import com.gpo.cronpaw.ui.components.rememberToast
-import com.gpo.cronpaw.ui.theme.CronSymbols
 import com.gpo.cronpaw.ui.theme.pawIsDark
 import com.gpo.cronpaw.ui.theme.rememberRichHaptics
 import com.gpo.cronpaw.ui.time.Times
@@ -284,7 +283,7 @@ fun ItemSheet(item: AgendaItem, onDismiss: () -> Unit) {
                     }
                 }
                 val pinned = live.key in pins
-                PillAction(if (pinned) CronSymbols.PinFilled else CronSymbols.Pin, if (pinned) "已置顶" else "置顶", on = pinned, Modifier.weight(1f)) {
+                PillAction(if (pinned) YoinSymbols.PinFilled else YoinSymbols.Pin, if (pinned) "已置顶" else "置顶", on = pinned, Modifier.weight(1f)) {
                     haptics.tick(); Pins.toggle(live.key)
                 }
                 val cal = live.source as? Source.Calendar

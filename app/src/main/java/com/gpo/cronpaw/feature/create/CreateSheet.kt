@@ -96,7 +96,6 @@ import com.gpo.cronpaw.core.agenda.Actions
 import com.gpo.cronpaw.core.agenda.Target
 import com.gpo.cronpaw.core.settings.AppSettings
 import com.gpo.cronpaw.ui.components.rememberToast
-import com.gpo.cronpaw.ui.theme.CronSymbols
 import com.gpo.cronpaw.ui.theme.YoinMotion
 import com.gpo.cronpaw.ui.theme.rememberRichHaptics
 import com.gpo.cronpaw.ui.time.Times
@@ -360,7 +359,7 @@ private fun TargetChip(t: Target, selected: Boolean, onClick: () -> Unit) {
         Box(Modifier.size(10.dp).clip(CircleShape).background(Color(t.color)))
         Spacer(Modifier.width(6.dp))
         if (t is Target.Notion) {
-            Icon(CronSymbols.Database, null, Modifier.size(14.dp), tint = cs.onSurfaceVariant)
+            Icon(YoinSymbols.Database, null, Modifier.size(14.dp), tint = cs.onSurfaceVariant)
             Spacer(Modifier.width(3.dp))
         }
         Text(
@@ -441,7 +440,7 @@ private fun VoiceStage(
         Spacer(Modifier.height(20.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onType, Modifier.size(56.dp)) {
-                Icon(CronSymbols.Keyboard, "打字", tint = cs.onSurfaceVariant)
+                Icon(YoinSymbols.Keyboard, "打字", tint = cs.onSurfaceVariant)
             }
             Spacer(Modifier.width(24.dp))
             Box(contentAlignment = Alignment.Center) {
@@ -451,12 +450,12 @@ private fun VoiceStage(
                     contentAlignment = Alignment.Center,
                 ) {
                     if (transcribing) CircularProgressIndicator(Modifier.size(28.dp), color = cs.onPrimary, strokeWidth = 3.dp)
-                    else Icon(CronSymbols.Stop, "结束", Modifier.size(32.dp), tint = cs.onPrimary)
+                    else Icon(YoinSymbols.StopFilled, "结束", Modifier.size(32.dp), tint = cs.onPrimary)
                 }
             }
             Spacer(Modifier.width(24.dp))
             Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) {
-                Icon(CronSymbols.Mic, null, tint = if (listening) cs.primary else cs.outline)
+                Icon(YoinSymbols.Mic, null, tint = if (listening) cs.primary else cs.outline)
             }
         }
         Spacer(Modifier.height(8.dp))
