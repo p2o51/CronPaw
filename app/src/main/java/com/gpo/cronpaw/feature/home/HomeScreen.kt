@@ -96,7 +96,6 @@ import com.gpo.cronpaw.ui.components.LocalToastScope
 import com.gpo.cronpaw.ui.components.rememberToast
 import com.gpo.cronpaw.ui.launch.launchDateSlot
 import com.gpo.cronpaw.ui.launch.launchReveal
-import com.gpo.cronpaw.ui.theme.CronSymbols
 import com.gpo.cronpaw.ui.theme.YoinMotion
 import com.gpo.cronpaw.ui.theme.rememberRichHaptics
 import com.gpo.cronpaw.core.focus.FocusController
@@ -639,7 +638,7 @@ private fun Header(first: LocalDate, last: LocalDate, showRange: Boolean, onMenu
     val cs = MaterialTheme.colorScheme
     val today = LocalDate.now()
     Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (onMenu != null) IconButton(onClick = onMenu) { Icon(CronSymbols.Menu, "日历和数据库") }
+        if (onMenu != null) IconButton(onClick = onMenu) { Icon(YoinSymbols.Menu, "日历和数据库") }
         else Spacer(Modifier.width(12.dp))
         Text(
             if (first.year != today.year) "${first.year % 100}年${first.monthValue}月" else "${first.monthValue}月",
