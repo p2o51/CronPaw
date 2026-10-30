@@ -85,7 +85,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gpo.cronpaw.core.agenda.AgendaItem
-import com.gpo.cronpaw.ui.theme.CronSymbols
 import com.gpo.cronpaw.ui.theme.YoinMotion
 import com.gpo.cronpaw.ui.time.Times
 import com.gpo.yoin.symbols.YoinSymbols
@@ -541,7 +540,7 @@ private fun ItemBlock(
         }
         // A video call: a small camera in the corner, the link itself is in the sheet.
         if (item.meeting != null && !narrow) {
-            Icon(CronSymbols.Videocam, "视频会议", Modifier.padding(start = 2.dp, top = if (compact) 0.dp else 1.dp).size(14.dp), tint = ink.copy(alpha = 0.8f))
+            Icon(YoinSymbols.Video, "视频会议", Modifier.padding(start = 2.dp, top = if (compact) 0.dp else 1.dp).size(14.dp), tint = ink.copy(alpha = 0.8f))
         }
     }
 }

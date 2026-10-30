@@ -48,7 +48,6 @@ import com.gpo.cronpaw.core.agenda.Target
 import com.gpo.cronpaw.core.notion.NotionClient
 import com.gpo.cronpaw.core.notion.NotionRepo
 import com.gpo.cronpaw.core.notion.PropSchema
-import com.gpo.cronpaw.ui.theme.CronSymbols
 import com.gpo.cronpaw.ui.theme.pawIsDark
 import com.gpo.cronpaw.ui.theme.rememberRichHaptics
 import com.gpo.yoin.symbols.YoinSymbols
@@ -93,7 +92,7 @@ private fun EventFields(target: Target.Calendar, start: Long, event: CalendarRep
     // Choices open a menu from their row instead of spilling chips across the sheet.
     Card {
         PickRow(
-            icon = { Icon(CronSymbols.Bell, null) },
+            icon = { Icon(YoinSymbols.Bell, null) },
             label = "提醒",
             value = if (event.reminders.isEmpty()) "不提醒" else event.reminders.joinToString("、") { reminderLabel(it) + if (it == 0) "" else "前" },
             set = event.reminders.isNotEmpty(),
@@ -108,7 +107,7 @@ private fun EventFields(target: Target.Calendar, start: Long, event: CalendarRep
                 }
             }
         }
-        FieldRow(CronSymbols.Place, event.location, { onEvent(event.copy(location = it)) }, "地点", singleLine = true)
+        FieldRow(YoinSymbols.Place, event.location, { onEvent(event.copy(location = it)) }, "地点", singleLine = true)
         PickRow(
             icon = { Icon(YoinSymbols.Repeat, null) },
             label = "重复",
@@ -202,7 +201,7 @@ private fun NotionFields(target: Target.Notion, chosen: NotionExtras, onChosen: 
             val many = p.type == "multi_select" || p.type == "relation"
             val names = p.options.filter { (it.id ?: it.name) in picked }.map { it.name }
             PickRow(
-                icon = { Icon(if (p.type == "relation") CronSymbols.Database else YoinSymbols.Filter, null) },
+                icon = { Icon(if (p.type == "relation") YoinSymbols.Database else YoinSymbols.Filter, null) },
                 label = p.name,
                 value = names.joinToString("、").ifBlank { "未选" },
                 set = names.isNotEmpty(),

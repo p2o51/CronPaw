@@ -46,7 +46,6 @@ import com.gpo.cronpaw.ui.components.PawTopBar
 import com.gpo.cronpaw.ui.components.rememberToast
 import com.gpo.cronpaw.ui.components.seam.seamGraphic
 import com.gpo.cronpaw.ui.components.seam.seamViewport
-import com.gpo.cronpaw.ui.theme.CronSymbols
 import com.gpo.cronpaw.ui.theme.rememberRichHaptics
 import com.gpo.yoin.symbols.YoinSymbols
 import kotlinx.coroutines.delay
@@ -144,7 +143,7 @@ fun NotionSettingsScreen(nav: Nav) {
             GroupTitle("数据库")
             Card {
                 dbs.forEach { db ->
-                    ListRow(CronSymbols.Database, db.title, if (db.enabled) null else "已停用，不在日历上", onClick = { haptics.tick(); nav.push("db:${db.id}") }) {
+                    ListRow(YoinSymbols.Database, db.title, if (db.enabled) null else "已停用，不在日历上", onClick = { haptics.tick(); nav.push("db:${db.id}") }) {
                         Box(Modifier.size(14.dp).clip(RoundedCornerShape(5.dp)).background(Color(db.color).copy(alpha = if (db.enabled) 1f else 0.35f)))
                         Spacer(Modifier.width(4.dp))
                         Chevron(false)

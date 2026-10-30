@@ -68,7 +68,6 @@ import com.gpo.cronpaw.core.notion.PropValue
 import com.gpo.cronpaw.feature.home.TodoDot
 import com.gpo.cronpaw.feature.home.itemColors
 import com.gpo.cronpaw.ui.components.rememberToast
-import com.gpo.cronpaw.ui.theme.CronSymbols
 import com.gpo.cronpaw.ui.theme.pawIsDark
 import com.gpo.cronpaw.ui.theme.rememberRichHaptics
 import com.gpo.cronpaw.ui.time.Times
@@ -174,7 +173,7 @@ fun ItemSheet(item: AgendaItem, onDismiss: () -> Unit) {
                                 .padding(start = 16.dp, end = 20.dp, top = 10.dp, bottom = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(CronSymbols.Videocam, null, Modifier.size(20.dp), tint = heroBg)
+                            Icon(YoinSymbols.Video, null, Modifier.size(20.dp), tint = heroBg)
                             Spacer(Modifier.width(8.dp))
                             Text(Meetings.service(url).let { if (it.first().code < 0x2E80) "加入 $it" else "加入$it" }, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = heroBg)
                         }
@@ -307,7 +306,7 @@ fun ItemSheet(item: AgendaItem, onDismiss: () -> Unit) {
                     }
                 }
                 val pinned = live.key in pins
-                PillAction(if (pinned) CronSymbols.PinFilled else CronSymbols.Pin, if (pinned) "已置顶" else "置顶", on = pinned, Modifier.weight(1f)) {
+                PillAction(if (pinned) YoinSymbols.PinFilled else YoinSymbols.Pin, if (pinned) "已置顶" else "置顶", on = pinned, Modifier.weight(1f)) {
                     haptics.tick(); Pins.toggle(live.key)
                 }
                 val cal = live.source as? Source.Calendar

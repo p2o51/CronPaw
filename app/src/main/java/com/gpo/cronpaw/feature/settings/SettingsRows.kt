@@ -68,7 +68,6 @@ import androidx.lifecycle.compose.currentStateAsState
 import com.gpo.cronpaw.navigation.Nav
 import com.gpo.cronpaw.ui.components.PawTopBar
 import com.gpo.cronpaw.ui.components.rememberToast
-import com.gpo.cronpaw.ui.theme.CronSymbols
 import com.gpo.cronpaw.ui.theme.YoinMotion
 import com.gpo.cronpaw.ui.theme.rememberRichHaptics
 import com.gpo.yoin.symbols.YoinSymbols

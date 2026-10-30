@@ -1,5 +1,5 @@
 [versions]
-agp = "9.1.0"
+agp = "9.2.1"
 kotlin = "2.3.20"
 composeBom = "2026.03.01"
 material3Expressive = "1.5.0-alpha16"
@@ -15,8 +15,10 @@ coroutines = "1.10.1"
 coil = "3.4.0"
 palette = "1.0.0"
 graphicsShapes = "1.1.0"
+yoinSymbols = "0.2.0"
 
 [libraries]
+yoin-symbols = { group = "io.github.p2o51", name = "yoin-symbols", version.ref = "yoinSymbols" }
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 compose-ui = { group = "androidx.compose.ui", name = "ui" }
 compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
